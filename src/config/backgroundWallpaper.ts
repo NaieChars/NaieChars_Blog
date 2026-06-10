@@ -4,7 +4,7 @@ export const fullscreenWallpaperConfig: FullscreenWallpaperConfig = {
 	enable: true,
 	src: {
 		desktop: [
-			"/assets/desktop-banner/1.webp",
+			"https://honaisu.cd.bcebos.com/naie-char/1.webp",
 		],
 		mobile: [
 			"/assets/mobile-banner/1.webp",
