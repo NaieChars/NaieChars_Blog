@@ -245,7 +245,7 @@ export async function getBannerImages(
 export function shouldEnableTransparency(
 	defaultWallpaperMode: string,
 ): boolean {
-	return defaultWallpaperMode === "overlay";
+	return defaultWallpaperMode === "overlay" || defaultWallpaperMode === "fullscreen";
 }
 
 /**

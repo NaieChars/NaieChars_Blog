@@ -88,8 +88,8 @@ const iconSrc = rawIcon?.match(/^(http|https|\/\/)/)
 
 const isLogoExternal = rawLogo?.match(/^(http|https|\/\/)/);
 const isIconExternal = rawIcon?.match(/^(http|https|\/\/)/);
-const hasLogoPngFallback = rawLogo?.endsWith(".png") && !isLogoExternal;
-const hasIconPngFallback = rawIcon?.endsWith(".png") && !isIconExternal;
+	const hasLogoPngFallback = false;
+	const hasIconPngFallback = false;
 const logoWebpSrc = hasLogoPngFallback
 	? logoSrc.replace(/\.png$/i, ".webp")
 	: logoSrc;

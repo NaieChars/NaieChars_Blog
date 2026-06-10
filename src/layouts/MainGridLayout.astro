@@ -155,7 +155,7 @@ const defaultPostListLayout = siteConfig.postListLayout?.defaultMode || "list";
 
 	<!-- Main content -->
 	<div
-		class={`absolute w-full z-30 pointer-events-none ${mobileNonHomeBannerClass ? "mobile-main-no-banner" : ""} ${siteConfig.wallpaperMode.defaultMode === "none" ? "no-banner-layout" : ""} ${transparentClass}`}
+		class={`main-content-panel absolute w-full z-30 pointer-events-none ${mobileNonHomeBannerClass ? "mobile-main-no-banner" : ""} ${siteConfig.wallpaperMode.defaultMode === "none" ? "no-banner-layout" : ""} ${transparentClass}`}
 		style={`top: ${finalMainPanelTop}`}
 	>
 		<!-- The pointer-events-none here prevent blocking the click event of the TOC -->

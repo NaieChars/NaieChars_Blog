@@ -93,7 +93,7 @@ const {
 			mainContent.style.position = "relative";
 			mainContent.style.zIndex = "30";
 			mainContent.style.setProperty("top", "0", "important");
-			mainContent.style.setProperty("margin-top", "1rem", "important");
+			mainContent.style.setProperty("margin-top", "0", "important");
 			return;
 		}
 
@@ -134,31 +134,20 @@ const {
 			return;
 		}
 
-		if (mode === "overlay") {
+		if (mode === "overlay" || mode === "fullscreen") {
 			wallpaper.style.setProperty(
 				"--wallpaper-opacity",
 				String(
-					getStoredNumber(
-						"overlayOpacity",
-						getCarrierNumber("overlayOpacity", 0.8),
-					),
+					getCarrierNumber("overlayOpacity", 1),
 				),
 			);
 			wallpaper.style.setProperty(
 				"--wallpaper-blur",
-				`${getStoredNumber(
-					"overlayBlur",
-					getCarrierNumber("overlayBlur", 10),
-				)}px`,
+				`${getCarrierNumber("overlayBlur", 0)}px`,
 			);
 			root.style.setProperty(
 				"--card-transparent-opacity",
-				String(
-					getStoredNumber(
-						"overlayCardOpacity",
-						getCarrierNumber("overlayCardOpacity", 0.5),
-					),
-				),
+				String(getCarrierNumber("overlayCardOpacity", 0.5)),
 			);
 			return;
 		}
@@ -186,8 +175,8 @@ const {
 				);
 				break;
 			case "fullscreen":
-				body.classList.remove("wallpaper-transparent", "no-banner-mode");
-				body.classList.add("enable-banner", "fullscreen-banner");
+				body.classList.remove("no-banner-mode");
+				body.classList.add("enable-banner", "fullscreen-banner", "wallpaper-transparent");
 				break;
 			case "overlay":
 				body.classList.remove("enable-banner", "fullscreen-banner");
@@ -368,7 +357,7 @@ const {
 					bannerWrapper.style.display = "block";
 				}
 				if (fullscreenWallpaper) {
-					fullscreenWallpaper.style.display = "none";
+					fullscreenWallpaper.style.display = "block";
 				}
 				if (tocWrapper) {
 					const scrollTop = document.documentElement.scrollTop;
@@ -378,7 +367,7 @@ const {
 						tocWrapper.classList.add("toc-hide");
 					}
 				}
-				body.classList.remove("wallpaper-transparent");
+				body.classList.add("wallpaper-transparent");
 				body.classList.remove("no-banner-mode");
 				forceReflow();
 				body.classList.add("enable-banner");

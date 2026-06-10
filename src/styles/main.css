@@ -284,7 +284,12 @@ html {
     isolation: isolate;
   }
 
-  .wallpaper-transparent .float-panel {
+  /* 全屏壁纸模式下主内容区统一半透明背景，滚动时顺势覆盖壁纸 */
+body.wallpaper-transparent .main-content-panel {
+  background: var(--card-bg-transparent) !important;
+}
+
+.wallpaper-transparent .float-panel {
     @apply bg-(--card-bg-transparent) backdrop-blur-sm;
   }
 

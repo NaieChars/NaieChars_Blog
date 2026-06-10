@@ -108,24 +108,10 @@ const renderGroups = [
 		const wallpaperEnabledVal = wallpaperEnabled;
 		const mode = wallpaperEnabledVal ? (localStorage.getItem('wallpaperMode') || 'banner') : 'banner';
 
-		if (mode === 'overlay') {
-			const isSw = typeof overlaySwitchable === 'object' ? overlaySwitchable : { opacity: !!overlaySwitchable, blur: !!overlaySwitchable, cardOpacity: !!overlaySwitchable };
-			const overlayOpacity = isSw.opacity ? localStorage.getItem('overlayOpacity') : null;
-			const overlayBlur = isSw.blur ? localStorage.getItem('overlayBlur') : null;
-			const overlayCardOpacity = isSw.cardOpacity ? localStorage.getItem('overlayCardOpacity') : null;
-
-			if (overlayOpacity) {
-				document.currentScript.parentElement.style.setProperty('--wallpaper-opacity', overlayOpacity);
-			}
-			if (overlayBlur) {
-				document.currentScript.parentElement.style.setProperty('--wallpaper-blur', overlayBlur + 'px');
-			}
-			if (overlayCardOpacity) {
-				root.style.setProperty('--card-transparent-opacity', overlayCardOpacity);
-			}
+		if (mode === 'overlay' || mode === 'fullscreen') {
 		}
 
-		if (mode !== 'overlay') {
+		if (mode !== 'overlay' && mode !== 'fullscreen') {
 			root.style.removeProperty('--card-transparent-opacity');
 			document.currentScript.parentElement.style.display = 'none';
 		}

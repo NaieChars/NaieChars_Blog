@@ -1,0 +1,31 @@
+---
+import { getEntry, render } from "astro:content";
+import Comment from "@components/comment/index.astro";
+import { PageHeader } from "@components/features/page-header";
+import Markdown from "@components/misc/Markdown.astro";
+import MainGridLayout from "@layouts/MainGridLayout.astro";
+
+const guestbookPost = await getEntry("spec", "guestbook");
+
+if (!guestbookPost) {
+	throw new Error("Guestbook page content not found");
+}
+
+const { Content } = await render(guestbookPost);
+const title = "留言板";
+---
+
+<MainGridLayout title={title}>
+	<div class="flex w-full rounded-[var(--radius-large)] overflow-hidden relative min-h-32">
+		<div class="card-base z-10 px-9 py-6 relative w-full">
+			<PageHeader title={title} />
+			<Markdown class="mt-2">
+				<Content />
+			</Markdown>
+		</div>
+	</div>
+
+	<div class="mt-4">
+		<Comment path="/guestbook/" />
+	</div>
+</MainGridLayout>

@@ -3,24 +3,24 @@ import { SITE_LANG } from "./siteConfig";
 
 // 评论系统配置
 export const commentConfig: CommentConfig = {
-	enable: false, // 启用评论功能。当设置为 false 时，评论组件将不会显示在文章区域。
-	system: "twikoo", // 评论系统选择: "twikoo" | "giscus"
+	enable: true, // 启用评论功能。当设置为 false 时，评论组件将不会显示在文章区域。
+	system: "giscus", // 评论系统选择: "twikoo" | "giscus"
 	twikoo: {
 		envId: "https://twikoo.vercel.app",
-		lang: SITE_LANG,
+		lang: "zh-CN",
 	},
 	giscus: {
-		repo: "your-github-username/your-repo-name",
-		repoId: "your-repo-id",
+		repo: "NaieChars/NaieChars_Blog",
+		repoId: "R_kgDOS08bkg",
 		category: "Announcements",
-		categoryId: "your-category-id",
+		categoryId: "DIC_kwDOS08bks4C-3Tn",
 		mapping: "pathname",
 		strict: "0",
 		reactionsEnabled: "1",
 		emitMetadata: "0",
-		inputPosition: "top",
+		inputPosition: "bottom",
 		theme: "preferred_color_scheme",
-		lang: SITE_LANG,
+		lang: "zh-CN",
 		loading: "lazy",
 	},
 };

@@ -387,7 +387,7 @@ html[data-banner-title-enabled="false"] .banner-text-overlay {
   body.enable-banner.fullscreen-banner .absolute.w-full.z-30 {
     position: relative !important;
     top: 0 !important;
-    margin-top: 1rem !important;
+    margin-top: 0 !important;
   }
 
   body.enable-banner.fullscreen-banner #main-grid {
@@ -420,6 +420,12 @@ html[data-banner-title-enabled="false"] .banner-text-overlay {
 }
 
 html.is-page-transitioning .banner-text-overlay {
+	display: none !important;
+}
+
+/* 全屏模式下隐藏 Banner 图片容器（壁纸由 FullscreenWallpaper 承担），保留文字覆盖层和水波动画 */
+body.fullscreen-banner #banner-carousel,
+body.fullscreen-banner #banner-single-container {
 	display: none !important;
 }
 

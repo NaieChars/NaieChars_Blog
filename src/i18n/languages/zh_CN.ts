@@ -3,18 +3,18 @@ import type { Translation } from "../translation";
 
 export const zh_CN: Translation = {
 	[Key.home]: "主页",
-	[Key.about]: "关于我们",
+	[Key.about]: "关于",
 	[Key.archive]: "归档",
 	[Key.search]: "搜索",
-	[Key.other]: "其他",
+	[Key.other]: "其它",
 
 	// 导航栏标题
 	[Key.navLinks]: "链接",
 	[Key.navMy]: "我的",
 	[Key.navAbout]: "关于",
-	[Key.navOthers]: "其他",
+	[Key.navOthers]: "其它",
 
-	[Key.tags]: "标签",
+	[Key.tags]: "个性标签",
 	[Key.categories]: "分类",
 	[Key.recentPosts]: "最新文章",
 	[Key.postList]: "文章列表",
