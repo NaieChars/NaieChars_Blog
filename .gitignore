@@ -45,6 +45,9 @@ fuwari/
 src/data/myself.ts
 src/pages/myself.astro
 
+# Generated emoji files
+public/assets/emoji/
+
 # Bangumi generated data
 src/data/bangumi-data.json
 

@@ -5,18 +5,20 @@ interface Props {
 	path: string;
 }
 
+const { emoji, ...twikooBase } = commentConfig.twikoo ?? {};
 const config = {
-	...commentConfig.twikoo,
+	...twikooBase,
 	el: "#tcomment",
 	path: Astro.props.path,
 };
+const emojiCdnUrls = emoji ?? [];
 ---
 
 <div id="twikoo-container" class="twikoo-container">
 	<div id="tcomment"></div>
 </div>
 
-<script is:inline define:vars={{ config }}>
+<script is:inline define:vars={{ config, emojiCdnUrls }}>
 	(function () {
 		const TWIKOO_CONTAINER_ID = "twikoo-container";
 		const TWIKOO_SCRIPT_URL = "/assets/js/twikoo.all.min.js";
@@ -33,11 +35,16 @@ const config = {
 		}
 
 		function createTwikooConfig() {
-			return {
+			const baseConfig = {
 				...config,
 				path: getCurrentPath(),
 				el: "#tcomment",
 			};
+			// 添加表情包配置
+			if (emojiCdnUrls && emojiCdnUrls.length > 0) {
+				baseConfig.emoji = emojiCdnUrls;
+			}
+			return baseConfig;
 		}
 
 		async function loadTwikooScript() {

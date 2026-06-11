@@ -4,10 +4,16 @@ import { SITE_LANG } from "./siteConfig";
 // 评论系统配置
 export const commentConfig: CommentConfig = {
 	enable: true, // 启用评论功能。当设置为 false 时，评论组件将不会显示在文章区域。
-	system: "giscus", // 评论系统选择: "twikoo" | "giscus"
+	system: "twikoo", // 评论系统选择: "twikoo" | "giscus"
 	twikoo: {
-		envId: "https://twikoo.vercel.app",
+		envId: "https://comment.naie-char.cc",
 		lang: "zh-CN",
+		// 表情包 OwO JSON：Bilibili 表情 + QQ 表情
+		emoji: [
+			"/assets/emoji/bilibili.json",
+			"/assets/emoji/bilibili-tv.json",
+			"/assets/emoji/qq.json",
+		],
 	},
 	giscus: {
 		repo: "NaieChars/NaieChars_Blog",

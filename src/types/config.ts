@@ -302,6 +302,8 @@ interface TwikooConfig {
 	envId: string;
 	region?: string;
 	lang?: string;
+	/** 表情包 OwO JSON CDN URL 列表，为空则使用 Twikoo 默认表情 */
+	emoji?: string[];
 }
 
 export type LIGHT_DARK_MODE = typeof LIGHT_MODE | typeof DARK_MODE;
