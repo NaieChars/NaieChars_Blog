@@ -1,49 +1,26 @@
+关于自己：
+- 电子科技大学信息与软件工程学院本科生
+- minecraft（生电党，建筑党，画质党，还有‘速通’？）
+- 战地五（萌新薯薯qwq）
+- 原神（五年牢玩家）
+- 音乐（JJ & Jay）
+- 画画
+- 小提琴
+- 排球
+- 喜欢自己瞎折腾 OpenGL
 
-This website is built with the **Astro** framework using the [Mizuki](https://github.com/LyraVoid/Mizuki) theme.
+为什么会选择计算机专业呢？我也不知道，就这样误打误撞来到这了吧，然后又昏头晕脑地开始了自己的计算机之旅……
+刚进大学的我还是一窍不通的小白，幸好宿舍有两位大佬，我从他们身上学习到了很多，真的很感谢他们。
 
-::github{repo="LyraVoid/Mizuki"}
-
-## 🌟 Theme Features
-
-### 🎨 Design & User Experience
-- **Modern & Elegant Design** - Clean, minimalist interface with beautiful typography
-- **Fully Responsive** - Optimized for all devices from mobile to desktop
-- **Dark/Light Mode** - Automatic theme switching with smooth transitions
-- **Beautiful Typography** - Enhanced readability with JetBrains Mono font
-- **Smooth Animations** - Fluid page transitions and interactive elements
-
-### 🔍 Content & Search
-- **Advanced Search** - Powered by [Pagefind](https://pagefind.app/) for fast, accurate results
-- **Enhanced Markdown** - Extended syntax with code highlighting and math support
-- **Interactive Table of Contents** - Auto-scroll navigation for long articles
-- **RSS Feed Generation** - Stay updated with automatic feed generation
-- **Reading Time Estimation** - Know how long articles take to read
-- **Post Categorization** - Organize content with tags and categories
-
-
-
-### 📱 Special Pages
-- **Anime Tracking Page** - Track your anime watching progress with ratings
-- **Friends Links Page** - Showcase friend websites with beautiful cards
-- **Diary/Moments Page** - Share life moments like social media posts
-- **Archive Page** - Organized timeline view of all posts
-- **About Page** - Customizable personal introduction (this page!)
-
-### 🛠 Technical Features
-- **Enhanced Code Blocks** - Powered by [Expressive Code](https://expressive-code.com/)
-- **Math Support** - LaTeX rendering with KaTeX for mathematical expressions
-- **Image Optimization** - PhotoSwipe gallery with lazy loading
-- **SEO Optimized** - Built-in sitemap and meta tags for better search visibility
-- **Performance Optimized** - Fast loading with caching and optimization
-- **Comment System Ready** - Integration support for Twikoo comments
-
-### 🎯 Advanced Markdown Features
-- **Callouts & Admonitions** - Beautiful info boxes with `> [!NOTE]`, `> [!TIP]`, `> [!WARNING]`
-- **Mathematical Equations** - Write LaTeX math with `$inline$` and `$$block$$` syntax
-- **GitHub Cards** - Embed repository cards with `::github{repo="user/repo"}`
-- **Syntax Highlighting** - Advanced code highlighting with line numbers
-- **Copy Code Buttons** - Easy code copying functionality
+最近主要在学习优秀的 MC 光影，争取早日搭建一个自己渲染引擎！
 
 ---
 
-*Built with ❤️ using Astro and inspired by modern web design principles.*
+## 网站基本信息
+- 网站个人头像：胡桃-Genshin Impact
+- 网站壁纸：以 minecraft 为主题的渲染图
+- 英文字体：ZenMaruGothic-Medium
+- 中文字体：萝莉体 第二版
+- 代码块字体：JetBrains Mono Variable
+
+---
