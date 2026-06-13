@@ -1,9 +1,9 @@
 ---
-title: OpenGL 学习笔记
+title: 基于 LearnOpenGL CN 的部分学习笔记
 published: 2026-06-10
 pinned: true
 description: 本文档为个人学习笔记，内容基于 LearnOpenGL CN 各章节整理归纳，并附加了一些工程渲染技巧
-tags: [Markdown, Blogging, OpenGL]
+tags: [OpenGL, Markdown, Blogging]
 category: 技术
 image: ./cover_image/MC_forest.png
 draft: false
