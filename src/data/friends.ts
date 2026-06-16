@@ -7,7 +7,7 @@ export interface FriendItem {
 	imgurl: string;
 	desc: string;
 	siteurl: string;
-	//tags: string[];
+	tags: string[];
 }
 
 // 友情链接数据
@@ -18,6 +18,7 @@ export const friendsData: FriendItem[] = [
 		imgurl: "https://honaisu.cd.bcebos.com/images/website/blog-icon.jpg",
 		desc: "时光流转,岁月更迭",
 		siteurl: "https://www.denvoshome.xyz/",
+		tags: ["link"],
 	},
 ];
 
