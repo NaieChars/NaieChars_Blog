@@ -5,7 +5,7 @@
 - 网站不应含有不良内容，包括但不限于色情、暴力、血腥、等违背中国法律法规的内容
 
 ## 申请格式
->名称：萘Naie_Chars
->介绍：也许、忘了、几场梦
->链接：https://www.naie-char.cc/
->头像：https://www.naie-char.cc/_astro/Hutao.CERe-4Xw_216kVk.webp
+>名称：萘Naie_Chars  
+>介绍：也许、忘了、几场梦  
+>链接：https://www.naie-char.cc/  
+>头像：https://www.naie-char.cc/_astro/Hutao.CERe-4Xw_216kVk.webp  
