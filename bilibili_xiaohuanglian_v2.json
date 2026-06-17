@@ -1,0 +1,383 @@
+{
+  "B站小黄脸(新)": {
+    "type": "image",
+    "container": [
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/doge-jg.png' style='width: 28px'>",
+        "text": "[doge_金箍]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/xk.png' style='width: 28px'>",
+        "text": "[笑哭]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/dd.png' style='width: 28px'>",
+        "text": "[蹲蹲]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/xxy.png' style='width: 28px'>",
+        "text": "[星星眼]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/wx.png' style='width: 28px'>",
+        "text": "[微笑]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/cg.png' style='width: 28px'>",
+        "text": "[吃瓜]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/dcall.png' style='width: 28px'>",
+        "text": "[打call]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/ok.png' style='width: 28px'>",
+        "text": "[OK]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/doge.png' style='width: 28px'>",
+        "text": "[doge]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/dk.png' style='width: 28px'>",
+        "text": "[大哭]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/lyj.png' style='width: 28px'>",
+        "text": "[辣眼睛]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/hj.png' style='width: 28px'>",
+        "text": "[滑稽]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/xjeq.png' style='width: 28px'>",
+        "text": "[喜极而泣]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/cy.png' style='width: 28px'>",
+        "text": "[呲牙]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/wz.png' style='width: 28px'>",
+        "text": "[歪嘴]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/tp.png' style='width: 28px'>",
+        "text": "[调皮]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/ma.png' style='width: 28px'>",
+        "text": "[妙啊]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/kgz.png' style='width: 28px'>",
+        "text": "[嗑瓜子]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/hu.png' style='width: 28px'>",
+        "text": "[藏狐]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/doge-td.png' style='width: 28px'>",
+        "text": "[脱单doge]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/xiao.png' style='width: 28px'>",
+        "text": "[笑]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/gxx.png' style='width: 28px'>",
+        "text": "[给心心]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/lh.png' style='width: 28px'>",
+        "text": "[脸红]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/dd2.png' style='width: 28px'>",
+        "text": "[嘟嘟]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/oh.png' style='width: 28px'>",
+        "text": "[哦呼]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/xh.png' style='width: 28px'>",
+        "text": "[喜欢]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/sl2.png' style='width: 28px'>",
+        "text": "[酸了]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/hx.png' style='width: 28px'>",
+        "text": "[害羞]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/xq.png' style='width: 28px'>",
+        "text": "[嫌弃]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/yh.png' style='width: 28px'>",
+        "text": "[疑惑]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/tx.png' style='width: 28px'>",
+        "text": "[偷笑]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/jy.png' style='width: 28px'>",
+        "text": "[惊讶]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/wl.png' style='width: 28px'>",
+        "text": "[捂脸]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/yx.png' style='width: 28px'>",
+        "text": "[阴险]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/dai.png' style='width: 28px'>",
+        "text": "[呆]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/kb.png' style='width: 28px'>",
+        "text": "[抠鼻]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/dx.png' style='width: 28px'>",
+        "text": "[大笑]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/jx.png' style='width: 28px'>",
+        "text": "[惊喜]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/dz.png' style='width: 28px'>",
+        "text": "[点赞]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/wy.png' style='width: 28px'>",
+        "text": "[无语]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/gz.png' style='width: 28px'>",
+        "text": "[鼓掌]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/gg.png' style='width: 28px'>",
+        "text": "[尴尬]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/lhcq.png' style='width: 28px'>",
+        "text": "[灵魂出窍]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/aj.png' style='width: 28px'>",
+        "text": "[傲娇]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/wq.png' style='width: 28px'>",
+        "text": "[委屈]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/teng.png' style='width: 28px'>",
+        "text": "[疼]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/leng.png' style='width: 28px'>",
+        "text": "[冷]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/re.png' style='width: 28px'>",
+        "text": "[热]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/sb.png' style='width: 28px'>",
+        "text": "[生病]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/sq.png' style='width: 28px'>",
+        "text": "[生气]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/wy2.png' style='width: 28px'>",
+        "text": "[捂眼]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/xs.png' style='width: 28px'>",
+        "text": "[嘘声]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/sk.png' style='width: 28px'>",
+        "text": "[思考]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/zj.png' style='width: 28px'>",
+        "text": "[再见]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/fby.png' style='width: 28px'>",
+        "text": "[翻白眼]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/zk.png' style='width: 28px'>",
+        "text": "[抓狂]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/hq.png' style='width: 28px'>",
+        "text": "[哈欠]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/fd.png' style='width: 28px'>",
+        "text": "[奋斗]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/mj.png' style='width: 28px'>",
+        "text": "[墨镜]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/ng.png' style='width: 28px'>",
+        "text": "[难过]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/kz.png' style='width: 28px'>",
+        "text": "[口罩]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/pz.png' style='width: 28px'>",
+        "text": "[撇嘴]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/hyq-jg.png' style='width: 28px'>",
+        "text": "[黑眼圈_金箍]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/hg.png' style='width: 28px'>",
+        "text": "[猴哥]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/bb-fx.png' style='width: 28px'>",
+        "text": "[坂本_佛系]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/sq-jg.png' style='width: 28px'>",
+        "text": "[生气_金箍]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/dragon.png' style='width: 28px'>",
+        "text": "[龙年]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/bf.png' style='width: 28px'>",
+        "text": "[豹富]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/sd.png' style='width: 28px'>",
+        "text": "[水稻]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/ncgb.png' style='width: 28px'>",
+        "text": "[奶茶干杯]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/ty.png' style='width: 28px'>",
+        "text": "[汤圆]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/jl.png' style='width: 28px'>",
+        "text": "[锦鲤]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/fdl.png' style='width: 28px'>",
+        "text": "[福到了]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/jt.png' style='width: 28px'>",
+        "text": "[鸡腿]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/xh2.png' style='width: 28px'>",
+        "text": "[雪花]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/spwx.png' style='width: 28px'>",
+        "text": "[视频卫星]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/gb.png' style='width: 28px'>",
+        "text": "[干杯]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/hd.png' style='width: 28px'>",
+        "text": "[黑洞]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/ax.png' style='width: 28px'>",
+        "text": "[爱心]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/sl.png' style='width: 28px'>",
+        "text": "[胜利]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/jy2.png' style='width: 28px'>",
+        "text": "[加油]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/bq.png' style='width: 28px'>",
+        "text": "[抱拳]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/xz.png' style='width: 28px'>",
+        "text": "[响指]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/by.png' style='width: 28px'>",
+        "text": "[保佑]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/fu.png' style='width: 28px'>",
+        "text": "[福]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/zc.png' style='width: 28px'>",
+        "text": "[支持]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/yb.png' style='width: 28px'>",
+        "text": "[拥抱]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/gl.png' style='width: 28px'>",
+        "text": "[跪了]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/gwl.png' style='width: 28px'>",
+        "text": "[怪我咯]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/xgllbj.png' style='width: 28px'>",
+        "text": "[香格里拉边境]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/rat.png' style='width: 28px'>",
+        "text": "[老鼠]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/ox.png' style='width: 28px'>",
+        "text": "[牛年]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/rabbit.png' style='width: 28px'>",
+        "text": "[兔年]"
+      },
+      {
+        "icon": "<img src='https://cdn.jsdelivr.net/gh/YiJio/emoji-chinese@1.1.0/bz/def/sxd.png' style='width: 28px'>",
+        "text": "[三星堆]"
+      }
+    ]
+  }
+}
