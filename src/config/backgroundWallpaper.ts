@@ -7,7 +7,7 @@ export const fullscreenWallpaperConfig: FullscreenWallpaperConfig = {
 			"https://honaisu.cd.bcebos.com/naie-char/1.webp",
 		],
 		mobile: [
-			"/assets/mobile-banner/1.webp",
+			"/assets/mobile-banner/1fufu.webp",
 		],
 	},
 	position: "center",
