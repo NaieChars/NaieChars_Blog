@@ -1,0 +1,37 @@
+---
+/**
+ * 文章浏览量（仅 Twikoo 管理员可见，数据来自 vercount.one）
+ */
+import I18nKey from "@i18n/i18nKey";
+import { i18n } from "@i18n/translation";
+
+const { url, class: className } = Astro.props;
+---
+
+<span
+	class:list={["pageview-counter", className]}
+	style="display:none"
+	data-url={url}
+	data-label={i18n(I18nKey.profileStatsPageViews)}
+></span>
+
+<script is:inline>
+	(function () {
+		const el = document.currentScript.previousElementSibling;
+		if (!el) return;
+
+		// 仅 Twikoo 管理员可见
+		const isAdmin = [...Array(localStorage.length)].some((_, i) => {
+			const k = localStorage.key(i)?.toLowerCase() || '';
+			return k.includes('twikoo') && k.includes('token') &&
+				(localStorage.getItem(localStorage.key(i))?.length || 0) > 20;
+		});
+		if (!isAdmin) return;
+
+		el.style.display = '';
+		fetch('https://vercount.one/json?url=' + encodeURIComponent(el.dataset.url))
+			.then(r => r.json())
+			.then(d => { el.textContent = '👁 ' + el.dataset.label + ' ' + (d.page_pv || 0); })
+			.catch(() => {});
+	})();
+</script>

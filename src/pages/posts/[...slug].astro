@@ -10,7 +10,8 @@ import {
 	PostNavigation,
 	RandomPosts,
 	RelatedPosts,
-	ShareCard,
+	PageViewCounter,
+		ShareCard,
 } from "@components/features/posts";
 import { ReadingTime, WordCount } from "@components/features/posts/atoms";
 import License from "@components/misc/License.astro";
@@ -26,6 +27,7 @@ import {
 	randomPostsConfig,
 	relatedPostsConfig,
 	shareConfig,
+	,
 } from "src/config";
 
 import Image from "../../components/atoms/Image/Image.astro";
@@ -283,6 +285,8 @@ const jsonLd = {
 					id={entry.id}
 					showEncrypted={isEncrypted}
 				/>
+				{/* 浏览量（仅管理员可见） */}
+				<PageViewCounter url={Astro.url.toString()} class="ml-2" />
 				{
 					(!entry.data.image ||
 						(entry.data.image &&

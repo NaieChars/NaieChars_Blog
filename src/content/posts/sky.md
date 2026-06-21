@@ -12,7 +12,11 @@ draft: false
 
 >这里仅提供相关的理论知识与公式，至于更加详细的渲染方案（比如公式在着色器中的近似计算，各项参数基于不同引擎与情景的设置，考虑臭氧的影响，优化GPU计算指令等等）建议您亲自阅览这方面相关的着色器文件。
 
-[这里是一份MC光影（Eclipse）的大气渲染着色器文件](https://github.com/NaieChars/NaieChars_Blog/blob/master/public/sky_render/phisical_sky.glsl)
+[这里是一份MC光影（Eclipse）的大气渲染着色器文件（有较为详细的注释）](https://github.com/NaieChars/NaieChars_Blog/blob/master/public/sky_render/phisical_sky.glsl)
+[Eclipse_Shader的github官方仓库](https://github.com/Merlin1809/Eclipse-Shader)
+
+
+在此先叠甲：本人也是才开始学习，如有错误不当之处请多多包涵，欢迎评论区指出。
 
 ### SkyBox Pass
 

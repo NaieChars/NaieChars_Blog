@@ -15,6 +15,7 @@ import {
 	LastModified,
 	PostMeta,
 	PostNavigation,
+	PageViewCounter,
 } from "@components/features/posts";
 import License from "@components/misc/License.astro";
 import Markdown from "@components/misc/Markdown.astro";
@@ -197,6 +198,8 @@ const jsonLd = {
 					category={entry.data.category || undefined}
 					id={entry.id}
 				/>
+				{/* 浏览量（仅管理员可见） */}
+				<PageViewCounter url={Astro.url.toString()} class="ml-2" />
 				{
 					(!entry.data.image ||
 						(entry.data.image &&
