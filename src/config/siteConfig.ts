@@ -215,10 +215,10 @@ export const siteConfig: SiteConfig = {
 		},
 		cjkFont: {
 			// 中日韩字体 - 作为回退字体
-			fontFamily: "萝莉体 第二版",
-			fontWeight: "500",
-			localFonts: ["loli.ttf"],
-			enableCompress: true, // 启用字体子集优化，减少字体文件大小
+			fontFamily: "思源黑体",
+			fontWeight: "400",
+			localFonts: ["SourceHanSansSC-Regular.otf"],
+			enableCompress: false, // OTF 格式不支持 Fontmin 子集化
 		},
 	},
 	showLastModified: true, // 控制"上次编辑"卡片显示的开关

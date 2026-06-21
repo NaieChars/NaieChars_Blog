@@ -43,6 +43,15 @@
   font-display: swap;
 }
 
+/* 导入 思源黑体 字体 */
+@font-face {
+  font-family: "思源黑体";
+  src: url("/assets/font/SourceHanSansSC-Regular.otf") format("opentype");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
 /* 确保平滑滚动，并稳定滚动条宽度以避免布局左右抖动 */
 html {
   scroll-behavior: smooth;
