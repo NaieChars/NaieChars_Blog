@@ -17,21 +17,30 @@ const { url, class: className } = Astro.props;
 
 <script is:inline>
 	(function () {
-		const el = document.currentScript.previousElementSibling;
+		var el = document.currentScript.previousElementSibling;
 		if (!el) return;
 
-		// 仅 Twikoo 管理员可见
-		const isAdmin = [...Array(localStorage.length)].some((_, i) => {
-			const k = localStorage.key(i)?.toLowerCase() || '';
-			return k.includes('twikoo') && k.includes('token') &&
-				(localStorage.getItem(localStorage.key(i))?.length || 0) > 20;
-		});
+		// 检测 Twikoo 管理员：查找 twikoo-access-token 或其他 twikoo 认证 key
+		var isAdmin = false;
+		for (var i = 0; i < localStorage.length; i++) {
+			var key = localStorage.key(i);
+			if (!key) continue;
+			var lower = key.toLowerCase();
+			// 匹配 twikoo 的认证 token（跳过 config、draft 等非认证 key）
+			if (lower.includes('twikoo') && !lower.includes('config') && !lower.includes('draft')) {
+				var val = localStorage.getItem(key);
+				if (val && (val.indexOf('eyJ') === 0 || val.length > 10)) {
+					isAdmin = true;
+					break;
+				}
+			}
+		}
 		if (!isAdmin) return;
 
 		el.style.display = '';
 		fetch('https://vercount.one/json?url=' + encodeURIComponent(el.dataset.url))
-			.then(r => r.json())
-			.then(d => { el.textContent = '👁 ' + el.dataset.label + ' ' + (d.page_pv || 0); })
-			.catch(() => {});
+			.then(function (r) { return r.json(); })
+			.then(function (d) { el.textContent = '\u{1F441} ' + el.dataset.label + ' ' + (d.page_pv || 0); })
+			.catch(function () {});
 	})();
 </script>
