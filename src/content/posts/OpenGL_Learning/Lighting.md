@@ -3,7 +3,7 @@ title: 基于 LearnOpenGL CN 的部分学习笔记
 published: 2026-06-10
 pinned: true
 description: 本文档为个人学习笔记，内容基于 LearnOpenGL CN 各章节整理归纳，并附加了一些工程渲染技巧
-tags: [OpenGL, Markdown, Blogging]
+tags: [OpenGL, 计算机图形学, Markdown, Blogging]
 category: 技术
 image: ./cover_image/MC_forest.png
 draft: false
@@ -12,7 +12,9 @@ draft: false
 # 基于OpenGL的光照描述与高级渲染
 
 ---
+> [!NOTE]
 注：本文档为个人学习笔记，内容基于 LearnOpenGL CN 各章节整理归纳，并附上了我的一些个人实战经验以及常用引擎级渲染技巧。特此声明：部分图片为 LearnOpenGL CN 原站截图，所有文字及代码均为手工编写与总结，少量内容可能存在拼写错误，还请谅解。
+>
 
 **<span style="font-size: 24px;">目录</span>**
 - [基于OpenGL的光照描述与高级渲染](#基于opengl的光照描述与高级渲染)
@@ -523,7 +525,9 @@ void main()
     //....光照处理
 }
 ```
-- >注意应用法线贴图的时候一定要解压法线向量，即重新映射
+> [!WARNING]
+注意应用法线贴图的时候一定要解压法线向量，即重新映射
+>
 
 - **（1）切线空间（tangent spcce）**
 切线空间是位于三角形表面之上的空间，法线相对于单个三角形的局部坐标系。法线贴图中的法线向量定义在切线空间中，由此我们需要 **TBN 矩阵**把法线从切线空间变换到不同空间。
@@ -699,7 +703,9 @@ void main()
     normal = normalize(normal * 2.0 - 1.0);
 }
 ```
-- >这里有一个点需要格外注意，视差贴图改变了纹理的坐标，因此所有的贴图必须要用新的坐标来采样，才能做到点与点的统一。后面如果是在世界空间做计算，还需将 normal 转到世界空间s
+> [!WARNING]
+这里有一个点需要格外注意，视差贴图改变了纹理的坐标，因此所有的贴图必须要用新的坐标来采样，才能做到点与点的统一。后面如果是在世界空间做计算，还需将 normal 转到世界空间s
+>
 
 下面是 ParallexMapping 函数的具体实现，传入 TangentViewDir 以及原纹理，并返回新的纹理坐标
 ```glsl
