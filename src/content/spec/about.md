@@ -21,7 +21,7 @@
 - 网站个人头像：胡桃-Genshin Impact
 - 网站壁纸：以 minecraft 为主题的渲染图
 - 英文字体：ZenMaruGothic-Medium
-- 中文字体：萝莉体 第二版
-- 代码块字体：JetBrains Mono Variable
+- 中文字体：思源黑体
+- 代码块字体：Consolas
 
 ---
