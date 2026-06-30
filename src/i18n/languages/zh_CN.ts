@@ -14,7 +14,7 @@ export const zh_CN: Translation = {
 	[Key.navAbout]: "关于",
 	[Key.navOthers]: "其它",
 
-	[Key.tags]: "个性标签",
+	[Key.tags]: "标签云",
 	[Key.categories]: "分类",
 	[Key.recentPosts]: "最新文章",
 	[Key.postList]: "文章列表",
