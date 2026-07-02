@@ -2,6 +2,11 @@
 
 .expressive-code {
   @apply relative;
+	/* 注释不倾斜（Shiki 用内联 style 渲染，需用属性选择器匹配） */
+	.ec-line span[style*="italic"] {
+		font-style: normal !important;
+	}
+
 
   /* Mermaid 全屏按钮与按钮体系的配色保持一致 */
   .mermaid-fullscreen-btn {

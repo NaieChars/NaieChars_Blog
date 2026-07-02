@@ -149,6 +149,7 @@ Texture texture("wall.png");
 在 Shader 构造函数里面就可能已经完成了读取 Shader 文件，编译 Shader，链接程序。在 Texture 构造函数里可能已经完成加载图片，上传 GPU，保存纹理 ID。
 
 > [!IMPORTANt]
+> 请了解  
 > <details>
 > <summary>有三种成员变量必须用初始化列表[可展开详情]
 > </summary>
