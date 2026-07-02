@@ -78,7 +78,7 @@ export default defineConfig({
 		}),
 		icon(),
 		expressiveCode({
-			themes: ["github-light", "github-dark"],
+			themes: ["github-light", "one-dark-pro"],
 			plugins: [
 				pluginCollapsibleSections(),
 				pluginLineNumbers(),
