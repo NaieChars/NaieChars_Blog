@@ -45,7 +45,7 @@ export function applyThemeToDocument(theme: LIGHT_DARK_MODE) {
 	}
 
 	const needsThemeChange = currentIsDark !== targetIsDark;
-	const expectedTheme = targetIsDark ? "github-dark" : "github-light";
+	const expectedTheme = targetIsDark ? "one-dark-pro" : "github-light";
 	const needsCodeThemeUpdate = currentTheme !== expectedTheme;
 
 	if (!needsThemeChange && !needsCodeThemeUpdate) {
@@ -62,7 +62,7 @@ export function applyThemeToDocument(theme: LIGHT_DARK_MODE) {
 		}
 
 		if (needsCodeThemeUpdate) {
-			const expressiveTheme = targetIsDark ? "github-dark" : "github-light";
+			const expressiveTheme = targetIsDark ? "one-dark-pro" : "github-light";
 			document.documentElement.setAttribute("data-theme", expressiveTheme);
 		}
 	};

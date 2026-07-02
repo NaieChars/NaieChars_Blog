@@ -94,7 +94,7 @@ export const THEME_CONFIG = {
 
 	// Expressive Code 主题映射
 	lightExpressiveTheme: "github-light",
-	darkExpressiveTheme: "github-dark",
+	darkExpressiveTheme: "one-dark-pro",
 } as const;
 
 // 滚动配置
