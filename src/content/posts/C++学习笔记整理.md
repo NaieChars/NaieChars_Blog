@@ -44,7 +44,28 @@ Engine::Math::Normalize();
 ```
 
 ### string
-`std::string` 比C中的 `char[]` 字符串更加方便，本质已经是一个类，可以简洁地进行很多操作，比如拼接，比较，获取长度等（如果不清楚具体操作的话，可以自行搜索）  
+`std::string` 比C中的 `char[]` 字符串更加方便，本质已经是一个类。
+
+<details>
+<summary>string 的常见操作 [点击展开]</summary>
+
+- 创建 `string` :  
+    `std::string s1 = "Hello!";` 或者 `std::string s2("world!");`
+
+- 常用成员函数
+    ```cpp
+    s.size();       // 长度
+    s.empty();      // 是否为空
+    s.clear();      // 清空
+    s.push_back();  // 尾部添加字符
+    s.pop_back();   // 删除最后一个字符
+    s.substr();     // 截取子串
+    s.find();       // 查找字符串
+    s.c_str();      // 转 const char*
+    ```
+
+</details>
+
 
 下面是更重要的一点：
 由于在 OpenGL 中 Shder / modelPath / texturePath 等的存储一般是字符串
@@ -448,3 +469,129 @@ shape.Draw();
 
 ---
 
+## STL
+
+### vector
+CG 里的常用成员函数：
+- **reserve()：** 在 CG 中 `reserve()`很重要，特别是在每帧动态生成粒子里，为避免反复扩容，建议先申请好内存。  
+- **data()：** 获取底层数组指针。
+- **size()**
+- **push_back()**
+
+简单来说，顶点数据（Vertex）、索引（Index）、纹理坐标、法线、实例数据等几乎都会存放在 `vector` 中；构建数据时用 `push_back()`，提前知道数量时用 `reserve()`，上传到 OpenGL 时用 `data()` 获取底层数组指针。
+
+### pair
+`std::pair` 就是把两个不同类型（或相同类型）的值打包成一个对象。相当于一个轻量级二元组，常用于临时返回两个值、保存一对关联数据。  
+创建：
+
+```cpp
+std::pair<std::string, int> p = {"纹理路径", 1};    // 纹理路径 -> OpenGL Texture ID
+auto p = std::make_pair("纹理路径", 1);    // 现代项目中，如果类型很容易推导，这个也比较常见
+
+// 访问通过 first，second 访问
+p.first;
+p.second;
+```
+
+> [!TIP]
+数据多就不要写 `pair` 了，`pair<pair<...>>` 非常难读，直接写 `struct`。
+>
+
+### array
+`std::array` 在游戏引擎里没有 `vector` 常见，但会出现在：
+- 固定数量的颜色、方向、顶点
+- 数学工具类
+- 引擎内部的小型固定缓存
+
+### deque
+`std::deque` 是 STL 已经帮你实现好的双端队列。与 `vector` 的主要区别在于 `deque` 是分段连续内存，而 `vector` 是连续内存，这也导致 `deque` **不能用** `data()`。
+
+`deque` 在图形学项目里不常见，一般在：
+- 输入事件队列
+- 日志缓冲
+- 最近 N 帧数据统计
+
+### queue
+**注意：**
+`queue` 不能访问中间元素，不能遍历。
+**`pop()` 不返回元素！**
+
+`deque` 是真正的容器，可以遍历，访问，进行队列头尾操作；  
+`queue` 只是容器适配器，只能进行队列操作
+
+### stack
+注意事项与 `queue` 相同，主要用于场景树 DFS
+
+### priority_queue
+`std::priority_queue` = 自动帮你排序的队列，每次取出的都是优先级最高（默认最大）的元素。也是一个容器适配器。
+底层逻辑默认是最大堆，复杂度 O(log n)
+
+CG 中的应用：
+- A* 路径规划（最为经典）
+- 任务调度
+
+### map
+`map` 的底层是红黑树，查找复杂度 O(log n)
+
+CG 中非常常见
+- Shader 管理
+
+```cpp
+std::map<std::string, Shader> shaders;
+shaders["PBR"];   // 直接得到 PBR 相关 shader
+```
+- 资源管理器
+
+> [!IMPORTANT]
+> - `operator[]` 会创建元素0，因此想要查看元素是否存在用 `find()`。
+> - map 不是按插入顺序排布
+
+### unordered_map
+底层是哈希表，不用排序，查找更快，用法几乎和 `map` 一样，现代图形学项目更偏爱 `unordered_map`
+
+### set 与 unordered_set
+自动去重与排序的容器
+**注意：** 
+- `set` 没有 `push_back()` ，因为它不是顺序容器，没有所谓的最后一个元素，只有 `insert()`。
+- 里面的元素默认是只读的。
+- 没有下标，即没有 `s[0]`
+
+### 迭代器
+
+现代写法：auto + iterator
+
+```cpp
+for(auto it = v.begin(); it != v.end(); it++)
+for(auto &x : v)
+```
+
+为什么讲 `begin` 和 `end` 设计成左闭右开？因为 `size = end - begin` 这样可以减少很多 BUG。  
+解引用用 `*it`，map / set 用 `it->first / it->second`。
+
+<details>
+<summary>iterator 失效 [点击展开]</summary>
+
+1. vector 失效
+
+```cpp
+auto it = v.begin();
+v.push_back(10); // 可能扩容
+```
+
+vector 扩容后，会重新分配内存，旧 iterator 指向旧内存导致无效
+
+1. erase 失效
+
+```cpp
+v.erase(it);        // 错误写法
+it = v.erase(it);   // 正确写法
+```
+
+erase 会返回下一个有效 iterator
+
+map/set 的 iterator 相对稳定，是树结构，不会整体失效。
+</details>
+
+---
+
+## STL 算法
