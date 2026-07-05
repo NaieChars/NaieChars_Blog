@@ -3,7 +3,7 @@ title: 从 C 到 C++：我的学习笔记（CG方向）
 published: 2026-07-01
 pinned: true
 description: 是时候好好系统复习/学习一下C++了，针对于CG方向，这是我的学习笔记。
-tags: [C++]
+tags: [C++, C]
 category: 技术
 draft: false
 ---
