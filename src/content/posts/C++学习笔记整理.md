@@ -665,3 +665,150 @@ Lambda 在现代 C++ 中几乎无处不在：
 > 推荐定义常量用 `constexpr` 而非宏定义常量 `#define`。因为前者有类型，有作用域，支持编译期计算，行为完全可预期
 
 把 `constexpr` 当成"编译期常量工具"即可。现代图形学项目会用它定义窗口尺寸、数学常量、矩阵大小等固定配置。
+
+### 左值、右值
+
+> [!tip]
+在 C++ 里，判断左值/右值有一条非常实用的经验法则：  
+如果一个表达式你可以用 `&` 对它取地址，它就是左值；如果不行，它就是右值。
+>
+
+### std::move() 与移动构造函数
+`std::move` 做的事就是把一个左值强行标成右值引用，让你可以把它当作右值一样窃取内部资源，从而避免了昂贵的拷贝。
+
+<details>
+<summary>移动构造函数的内部实现：[点击展开]</summary>
+
+```cpp
+class Mesh {
+public:
+    std::vector<float> vertices;  // 用 vector 管理一堆顶点数据
+
+    // 移动构造：直接偷走 other 的资源
+    Mesh(Mesh&& other) noexcept : vertices(std::move(other.vertices)) 
+    {
+        // other.vertices 现在变成空的了，但可以安全析构
+    }
+};
+```
+
+- 移动构造函数接收一个右值引用作为参数（就是 `&&`）
+- `noexcept`：几乎所有的移动构造函数都应该标记为 noexcept，这样标准库容器（如 std::vector）在扩容时会更高效地使用移动而不是拷贝。
+- 初始化列表里 `vertices(std::move(other.vertices))`：直接调用了 `std::vector` 自己的移动构造函数，把 `other.vertices` 内部指向堆内存的指针“偷”了过来，然后 `other.vertices` 变成空容器。
+</details>
+
+### noexcept
+`noexcept` 用来承诺函数不会抛出异常。可使容器移动更高效
+以 `std::vector` 扩容为例：当 `vector` 需要重新分配更大的内存，并把旧元素转移到新空间时，它会检查元素类型的移动构造函数是否 `noexcept`。
+
+- 如果 `noexcept` 为真：`vector` 会放心地使用移动构造来转移每个元素，这样扩容时只是指针交换，速度极快。
+
+- 如果没有 `noexcept`：`vector` 为了安全，会退化为拷贝构造，老老实实复制每一份数据。
+
+### RAII
+利用 C++ 对象一定会被销毁（调用析构函数）的规则，把资源的生命周期和对象的生命周期绑定在一起。
+
+### 智能指针
+智能指针基本知识
+
+- `std::unique_ptr`: 任何时候都只有一个 `unique_ptr` 实例可以指向并拥有那块内存。  
+对应 CG 里的例子，一个对象对应一个 GPU 资源
+
+```cpp
+class Texture {
+    GLuint id;
+public:
+    Texture()  { glGenTextures(1, &id); }
+    ~Texture() { glDeleteTextures(1, &id); }
+};
+
+auto tex = std::make_unique<Texture>();  // 创建，独占纹理
+auto tex2 = std::move(tex);     // 转移所有权，不能拷贝
+```
+
+- `std::shared_ptr`
+共享纹理、材质是典型场景：
+
+```cpp
+class Material {
+    std::shared_ptr<Texture> diffuse;
+    std::shared_ptr<Texture> normal;
+};
+
+// 多个材质可以共享同一张贴图
+Material mat1, mat2;
+mat1.diffuse = std::make_shared<Texture>("brick.png");
+mat2.diffuse = mat1.diffuse;  // 同一张贴图
+```
+
+> [!WARNING]
+> 循环引用导致泄漏：A 持有 B 的 `shared_ptr`，B 也持有 A 的 `shared_ptr`，计数永远不为 0。
+> 共享资源才用它，否则优先 `unique_ptr`，因为有额外开销（控制块、原子操作）。
+
+
+- `std::weak_ptr`
+
+## 文件
+
+### std::ifstream
+
+<details>
+<summary>基本用法</summary>
+
+```cpp
+#include <fstream>
+#include <string>
+#include <sstream>
+
+// 打开文件
+std::ifstream file("vertex_shader.glsl");
+if (!file.is_open()) {
+    // 处理错误
+}
+
+// 一次性读完整内容（最常用在Shader）
+std::stringstream buffer;
+buffer << file.rdbuf();
+std::string shaderSource = buffer.str();
+
+// 逐行读（处理配置文件）
+std::string line;
+while (std::getline(file, line)) {
+    // ...
+}
+// file 离开作用域，自动调用 fclose
+```
+</details>
+
+用完后重新打开同一个文件，记得先 `close()` 或让它离开作用域重建。
+
+### ofstream
+
+<details>
+<summary>基本用法</summary>
+
+```cpp
+#include <fstream>
+#include <string>
+
+// 创建并打开文件（默认会创建新文件，若存在则清空）
+std::ofstream out("log.txt");
+if (!out.is_open()) {
+    // 处理错误
+}
+
+// 就像用 cout 一样写入
+out << "Render time: " << deltaTime << " ms\n";
+out << "FPS: " << fps << std::endl;
+
+// 也支持二进制写入（如图形截图原始数据）
+// std::ofstream bin("screenshot.raw", std::ios::binary);
+// bin.write(reinterpret_cast<const char*>(pixels), size);
+
+// out 离开作用域，自动关闭文件
+```
+</details>
+
+默认打开模式 `std::ios::out` 会清空已存在的文件，想追加内容用 `std::ios::app`
+
+### 二进制文件
