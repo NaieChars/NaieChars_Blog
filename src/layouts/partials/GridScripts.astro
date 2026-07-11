@@ -62,7 +62,7 @@ const {
 
 	function syncMainContentPosition(mode) {
 		const mainContent = document.querySelector(
-			".absolute.w-full.z-30.pointer-events-none",
+			".absolute.w-full.z-60.pointer-events-none",
 		);
 		const bannerWrapper = document.getElementById("banner-wrapper");
 		if (!mainContent) {
@@ -196,7 +196,7 @@ const {
 		// 使用 requestAnimationFrame 确保 DOM 准备好
 		requestAnimationFrame(function () {
 			const mainContent = document.querySelector(
-				".absolute.w-full.z-30.pointer-events-none",
+				".absolute.w-full.z-60.pointer-events-none",
 			);
 			if (mainContent) {
 				syncMainContentPosition(wallpaperMode);
@@ -290,7 +290,7 @@ const {
 		const navbar = document.getElementById("navbar");
 		const body = document.body;
 		const mainContent = document.querySelector(
-			".absolute.w-full.z-30.pointer-events-none",
+			".absolute.w-full.z-60.pointer-events-none",
 		);
 		const tocWrapper = document.getElementById("toc-wrapper");
 
