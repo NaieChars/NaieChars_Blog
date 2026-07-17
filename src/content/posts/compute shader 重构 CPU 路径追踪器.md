@@ -2,7 +2,7 @@
 title: Compute Shader 重构 CPU 路径追踪器
 published: 2026-07-18
 pinned: true
-description: 前段时间我按照 RTIOW 和 RTINW 搭建了一个 CPU 路径追踪器，实际渲染速度非常慢，于是我打算用 Compute Shader 重构一下。这其中便会涉及到从 CPU 编程到 GPU 编程的思维转变。所以我打算以此写一篇偏个人向的笔记，记录一下重构过程中新的知识以及一些经验技巧。
+description: 前段时间我按照 RTIOW 和 RTINW 搭建了一个 CPU 路径追踪器，实际渲染速度非常慢，于是我打算用 Compute Shader 重构一下。这其中会涉及到从 CPU 编程到 GPU 编程的思维转变，以及怎么写一个 Compute Shader。本文记录了我重构的完整过程以及一些经验技巧。
 tags: [OpenGL, Compte Shader, C++, RayTracer]
 category: 技术
 draft: false
