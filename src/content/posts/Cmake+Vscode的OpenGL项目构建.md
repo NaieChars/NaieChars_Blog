@@ -289,12 +289,14 @@ add_executable(你的项目名
 修改 `main.cpp` 里的代码，在 shaders/ 里增加着色器文件（如 `.comp`、`.vert`、`.glsl`）
 
 #### 每次修改完后续编译
-每次修改完代码，直接输入如下指令编译并运行即可
+每次修改完 C++ 代码，直接输入如下指令编译并运行即可
 
 ```powershell
 cmake --build build
 .\build\Debug\你的项目名.exe
 ```
+
+如果只是单纯修改了shader，那么直接运行 `.\build\Debug\你的项目名.exe` 即可，因为 shader 文件不参与 C++ 编译、
 
 ## push 到 github
 既然有了一个专属于自己的 OpenGL 项目，怎么说都得 push 到你的 github 上吧。  
