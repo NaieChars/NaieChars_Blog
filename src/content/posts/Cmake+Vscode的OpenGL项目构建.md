@@ -69,11 +69,11 @@ draft: false
 
 #### 5. 获取 stb_image.h
 - 打开 <https://github.com/nothings/stb/blob/master/stb_image.h>
-- 将整个 stb_image.h 拷贝到 third/stb/ 下
+- 将整个 stb_image.h 拷贝到 third_party/stb/ 下
 
 #### 6. 获取 stb_image_write.h
 - 打开 <https://raw.githubusercontent.com/nothings/stb/master/stb_image_write.h>
-- 将整个 stb_image_write.h 拷贝到 third/stb/ 下
+- 将整个 stb_image_write.h 拷贝到 third_party/stb/ 下
 
 网址如果打不开建议刷新一下，并用梯子解决
 
@@ -172,7 +172,7 @@ int main() {
         return -1;
     }
 
-    // 今天的验证重点：确认显卡支持compute shader所需的版本
+    // 确认显卡支持compute shader所需的版本
     std::cout << "OpenGL version: " << glGetString(GL_VERSION) << "\n";
     std::cout << "GLSL version: " << glGetString(GL_SHADING_LANGUAGE_VERSION) << "\n";
 
@@ -220,9 +220,11 @@ int main() {
 
 ---
 
+每写好一个文件记得 CTRL+C **保存**
+
 ## 配置并编译
 
-在你 VSCode 的终端中依次输入下面的命令 **（确保下面命令都是在根目录中进行，以及我这里用的是 powershell！）：**  
+在你 VSCode 的终端中依次输入下面的命令 **（确保下面命令都是在根目录中进行，我这里用的是 powershell！）：**  
 #### 首先输入：
 
 ```powershell
@@ -235,7 +237,7 @@ cmake -B build
 ···
 -- Configuring done (11.1s)
 -- Generating done (0.1s)
--- Build files have been written to: D:/CG/raytracer_gpu/build   <- 注意这里：build 文件在根目录生成，这是我的一个项目示例目录
+-- Build files have been written to: D:/CG/raytracer_gpu/build   <- 注意这里：build 文件已在根目录生成（这是我的一个项目示例目录）
 ```
 
 > [!tip]
@@ -253,14 +255,13 @@ cmake --build build
 raytracer_gpu.vcxproj -> D:\CG\raytracer_gpu\build\Debug\raytracer_gpu.exe
 ```
 
-如果都没问题，那么恭喜你可以进入最后一步了，试着跑一下你刚生成的 exe
-#### 最后输入：
+下面试着跑一下你刚生成的 exe：
 
 ```powershell
 .\build\Debug\你的项目名.exe       
 ```
 
-应该会看到一个深灰色小窗口弹出来，同时终端打印类似这样的内容：
+你应该会看到一个**深灰色小窗口**弹出来，同时终端打印类似这样的内容：
 
 ```powershell
 OpenGL version: 4.3.0 NVIDIA 592.00
