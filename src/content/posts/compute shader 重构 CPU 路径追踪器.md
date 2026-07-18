@@ -9,10 +9,13 @@ draft: false
 ---
 
 > [!NOTE]
-阅读前，请确保你有一定的 OpenGL 和路径追踪基础  
+阅读前，请确保你有一定的 OpenGL 基础，以及已经跟着《Ray Tracing in Next Week》完成了一遍 CPU 路径追踪器搭建  
 为了节省空间，本文的代码均折叠了起来，需要你手动展开。同时，每一个代码块都已经写好了详细的注释，方便逐行理解。   
-由于我也是第一次接触 Comepute Shader，我会**从最开始写起**。为了回忆之前所学，我在一些基础的 OpenGL 内容后面也给了详细解释。
+由于我也是第一次接触 Comepute Shader，我会**从最开始写起**。为了回忆之前所学，我在一些基础的 OpenGL 内容后面也给了详细解释。  
+至于为什么要如此详细地给出完整代码，是因为给读者节约点自己架构的时间（懒人模式）
 >
+
+---
 
 # 开始
 ## 一张图厘清 Compute Shader 数据流
@@ -54,6 +57,9 @@ void main()
 // 流程：
 // compute shader 把结果写进一张纹理（用image2D写入）
 // 一个全屏三角形/quad，配合fragment shader把这张纹理采样出来显示
+
+// 我们在 CPU 端计算需要的线程采用的是向上取整，那么难免会因为尺寸不是整倍数而导致线程有多余
+// 这些多余的线程在检查到自己负责的坐标超出图像范围时，会立即 return，结束执行。
 ```
 
 </details>
@@ -83,7 +89,7 @@ void main()
 </details>
 
 > [!tip]
-不用建VAO/VBO传顶点数据，靠 `gl_VertexID`（0,1,2）直接在shader里算出一个覆盖全屏的大三角形。你只需要在CPU端调用 `glDrawArrays(GL_TRIANGLES, 0, 3)`，不用绑定任何顶点缓冲。
+不用建**实际的**VAO/VBO传顶点数据，靠 `gl_VertexID`（0,1,2）直接在shader里算出一个覆盖全屏的大三角形。你只需要在CPU端调用 `glDrawArrays(GL_TRIANGLES, 0, 3)`，不用绑定任何顶点缓冲。
 >
 
 <details>
@@ -271,7 +277,7 @@ int main()
 如果一切顺利，你将得到如下这个彩色窗口
 
 <p align="center">
-  <img src="/markdown_picture/ComputeShader/HelloComp.png" width="500">
+  <img src="/markdown_picture/ComputeShader/HelloComp.png" width="300">
 </p>
 <p align="center">
   第一个窗口！
@@ -385,7 +391,654 @@ class Shader
 
 </details>
 
+---
+
 # 单球光追
 
-新建 `src/shaders/raytrace.comp`，把RTIOW的相机射线生成 + 球体求交搬过来：
+新建 `src/shaders/raytrace.comp`，把RTIOW的相机射线生成 + 球体求交移植过来：
+
+<details>
+<summary> raytrace.comp文件 </summary>
+
+```glsl
+#version 430 core
+
+layout(local_size_x = 16, local_size_y = 16) in;
+layout(rgba32f, binding = 0) uniform image2D outputImage;
+
+const float INF = uintBitsToFloat(0x7F800000u);
+
+// 相机参数
+uniform vec3 camOrigin;
+uniform vec3 camLowerLeftCorner;
+uniform vec3 camHorizontal;
+uniform vec3 camVertical;
+
+// 球体参数，暂时先写死一个球，后面再改成 SSBO 存放多个球
+uniform vec3 sphereCenter;
+uniform float sphereRadius;
+
+// 光线与球体求交，返回命中距离，没命中返回-1.0
+float hitSphere(vec3 center, float radius, vec3 rayOrigin, vec3 rayDir, float t_min, float t_max)
+{
+    vec3 oc = rayOrigin - center;
+    float a = dot(rayDir, rayDir);
+    float halfB = dot(oc, rayDir);
+    float c = dot(oc, oc) - radius * radius;
+
+    float discriminant = halfB * halfB - a * c;
+
+    if (discriminant < 0.0) return -1.0;
+
+    float root = (-halfB - sqrt(discriminant)) / a;
+    if (!(root > t_min && root < t_max))
+    {
+        root = (-halfB + sqrt(discriminant)) / a;
+        if (!(root > t_min && root < t_max))
+            return -1.0;
+    }
+    return root;
+}
+
+
+vec3 rayColor(vec3 rayOrigin, vec3 rayDir)
+{
+    float t = hitSphere(sphereCenter, sphereRadius, rayOrigin, rayDir, 0.0001, INF);
+    if (t > 0.0)
+    {
+        vec3 normal = normalize(rayOrigin + rayDir * t - sphereCenter);
+        return 0.5 * (normal + vec3(1.0));
+    }
+    
+    vec3 unitDir = normalize(rayDir);
+    float a = 0.5 * (unitDir.y + 1.0);
+    return (1.0 - a) * vec3(1.0) + a * vec3(0.5, 0.7, 1.0); 
+}
+
+void main()
+{
+    ivec2 pixelCoord = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 imageSize = imageSize(outputImage);
+    if (pixelCoord.x >= imageSize.x || pixelCoord.y >= imageSize.y) return;
+
+    float u = float(pixelCoord.x) / float(imageSize.x);
+    float v = float(pixelCoord.y) / float(imageSize.y);
+
+    vec3 rayDir = camLowerLeftCorner + u * camHorizontal + v * camVertical - camOrigin;
+    vec3 color = rayColor(camOrigin, rayDir);
+
+    imageStore(outputImage, pixelCoord, vec4(color, 1.0));
+}
+```
+
+</details>
+
+同样在`main.cpp`里面增添相机的参数设置，传入 uniform
+
+<details>
+<summary> main.cpp 更新</summary>
+
+```cpp
+raytraceProgram.use();
+glBindImageTexture(0, outputTexture, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA32F);
+
+// 相机参数，和RTIOW里camera构造函数的计算逻辑一致
+float aspectRatio = float(SCR_WIDTH) / float(SCR_HEIGHT);
+float viewportHeight = 2.0f;
+float viewportWidth = aspectRatio * viewportHeight;
+float focalLength = 1.0f;
+
+raytraceProgram.setVec3("camOrigin", 0, 0, 0);
+raytraceProgram.setVec3("camHorizontal", viewportWidth, 0, 0);
+raytraceProgram.setVec3("camVertical", 0, viewportHeight, 0);
+raytraceProgram.setVec3("camLowerLeftCorner",
+    -viewportWidth/2, -viewportHeight/2, -focalLength);
+
+raytraceProgram.setVec3("sphereCenter", 0, 0, -1);
+raytraceProgram.setFloat("sphereRadius", 0.5f);
+
+GLuint groupsX = (SCR_WIDTH + 15) / 16;
+GLuint groupsY = (SCR_HEIGHT + 15) / 16;
+glDispatchCompute(groupsX, groupsY, 1);
+glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+```
+</details>
+
+这里我们用经典的办法让法线表示颜色，输出一个球。如果一切顺利你将得到下面的输出：
+
+<p align="center">
+  <img src="/markdown_picture/ComputeShader/sphere.png" width="300">
+</p>
+<p align="center">
+  第一彩色球！
+</p>
+
+---
+# BVH
+注：下面真的就是面向我自己的笔记了，主要是代码量大，架构复杂（要把 RTINW 的部分代码移植过来），导致很难写清楚每一步。
+## 大致流程
+
+我们都知道，在CPU上每个线程都有自己独立的、几MB大的调用栈，完全可以容纳递归，但是GPU就不同。  
+在GPU中，一个workgroup里成千上万个线程是"锁步"执行的（同一时刻尽量跑同一条指令），每个线程分到的栈空间极小（几百字节到几KB级别），而且大部分GLSL编译器直接不支持递归函数调用，因为编译器需要在编译时确定每个线程占用多少寄存器/栈空间，递归的深度在编译期是不确定的。  
+所以唯一的解决办法就是：把递归改成**用一个显式数组模拟栈的循环**，为什么是数组，因为GPU用不了指针。  
+
+首先来顺一遍流程，从程序开始，**CPU和GPU做了什么**。（重点放在bvh构建上）  
+
+#### 初始化 OpenGL 环境
+创建GLFW窗口，加载函数指针，生成空VAO，创建一张2D纹理作为compute shader的输出目标
+#### 构建场景（C++ 传统 OOP 方式）
+用 `shared_ptr<hittable>` 构建一个场景世界。
+#### CPU 端递归构建 BVH 树
+调用 `bvh_node` 构造函数，递归分割、每个节点计算好自己的 AABB，形成一棵树
+#### 拍平*
+将递归树翻译成 GPU 可用的连续数组，拍平过后得到两个 `vector`：（这里的变量名不代表最后的变量名，先理解即可）
+- `flatNodes`：`vector<GPUBVHNode>`，每个元素代表一个树节点（内部/叶子），通过整数索引引用。
+- `flatSpheres`：`vector<GPUSphere>`，所有球体数据紧密排列，叶子节点的 `rightChild` 指向这里。
+#### 上传数据到 GPU
+创建两个 SSBO  
+- BVH SSBO (binding = 1)：
+  - `glBufferData` 将 `flatNodes` 二进制拷贝到显存。
+
+- Sphere SSBO (binding = 2)：
+    - `glBufferData` 将 `flatSpheres` 二进制拷贝到显存。
+- 设置 Uniform，绑定输出纹理
+
+#### GPU 渲染每一帧
+派发线程，每个线程进行 BVH 求交，着色，写入纹理等等
+
+## 对 CPU 端进行重构
+BVH 重构可谓是相当有挑战的一部分，下面我们的工作核心是：**将面向对象的递归场景树，彻底拍平为 GPU 可用的扁平数组，同时消除运行时多态。**
+
+下面只给出了核心函数与文件（有较为详细注释），具体的C++类的改写还得自己来。这一步暂时不管材质和动态模糊（我真的不喜欢动态模糊，所以我把抽象类的接口以及球的构造函数改成了无动态模糊的类型），可以直接从 RTINW 迁移过来的Cpp文件有：aabb.h, bvh.h, hittable_list.h, hittable.h, rtweekend.h,  sphere.h, vec3.h  
+- vec3.h 还是先保留，我们在最后的bvh_h里面拍平树的时候再用glm就是，不是很影响。
+- ray.h为何没有迁移？因为光线都是在GPU里面算好的，C++端基本不需要了，最多只是填参数而已，这里我选择把ray相关的函数参数都改成 rayOrigin和rayDir.
+- sphere.h基本上就退化为了创建场景时有用，创建一个球的类型
+- rtweekend.h基本没用，因为随机函数后面用 GPU随机数生成器
+- hittable_list.h里面hittable_list类的hit函数直接架空，因为我们会在GPU端实现。
+- aabb.h计算包围盒与光线交点的hit函数直接架空，我们在GPU里实现。
+
+<details>
+<summary>bvh.h完整文件</summary>
+
+```cpp
+#ifndef BVH_H
+#define BVH_H
+
+
+#include "hittable_list.h"
+#include "sphere.h"
+
+#include <algorithm>
+#include <glm/glm.hpp>
+
+// bvh_node 类是RTINW自带的，基本没做任何修改
+class bvh_node : public hittable
+{
+    public:
+    bvh_node() {}
+
+    bvh_node(std::vector<shared_ptr<hittable>>& objects, size_t start, size_t end)
+    {
+        int axis = random_int(0, 2);
+
+        auto comparator = (axis == 0) ? box_x_compare
+                    : (axis == 1) ? box_y_compare
+                                  : box_z_compare;
+
+
+        size_t object_span = end - start;   // start 和 end 是区间下标 [start, end)，object_span 即为这个节点应该处理的物体个数。
+
+        if (object_span == 1)
+        {
+            left = right = objects[start];
+        }
+        else if (object_span == 2)
+        {
+            left = objects[start];
+            right = objects[start + 1];
+        }
+        else
+        {
+            std::sort(objects.begin() + start, objects.begin() + end, comparator);
+
+            auto mid = start + object_span / 2;
+            // 递归构建树
+            left = make_shared<bvh_node>(objects, start, mid);
+            right = make_shared<bvh_node>(objects, mid, end);
+        }
+
+        aabb box_left, box_right;
+
+        if (  !left->bounding_box (box_left) || !right->bounding_box(box_right))
+            std::cerr << "No bounding box in bvh_node constructor.\n";
+
+        bbox = surrounding_box(box_left, box_right);
+    }
+
+    // 遍历左右子树求交取最近的交点————现在在 GPU 实现
+    bool hit(const vec3& ray_origin, const vec3& ray_dir, double t_min, double t_max, hit_record& rec) const override 
+    {
+        /*
+        if (!bbox.hit(ray_origin, ray_dir, t_min, t_max))
+            return false;
+        bool hit_left = left->hit(r, t_min, t_max, rec);
+        bool hit_right = right->hit(r, t_min, hit_left ? rec.t : t_max, rec);
+        return hit_left || hit_right;
+        */
+
+        return false;
+    }
+
+    bool bounding_box(aabb& output_box) const override 
+    { 
+        output_box = bbox;
+        return true; 
+    }
+
+    shared_ptr<hittable> left;
+    shared_ptr<hittable> right;
+    aabb bbox;
+
+    static bool box_compare(const shared_ptr<hittable> a, const shared_ptr<hittable> b, int axis_index)
+    {
+        aabb box_a;
+        aabb box_b;
+
+        if (!a->bounding_box(box_a) || !b->bounding_box(box_b))
+        std::cerr << "No bounding box in bvh_node constructor.\n";
+
+        return box_a.min().e[axis_index] < box_b.min().e[axis_index];
+    }
+
+    static bool box_x_compare (const shared_ptr<hittable> a, const shared_ptr<hittable> b)
+    {
+        return box_compare(a, b, 0);
+    }
+
+    static bool box_y_compare (const shared_ptr<hittable> a, const shared_ptr<hittable> b) 
+    {
+        return box_compare(a, b, 1);
+    }
+
+    static bool box_z_compare (const shared_ptr<hittable> a, const shared_ptr<hittable> b) 
+    {
+        return box_compare(a, b, 2);
+    }
+};
+
+//======================================================================
+
+struct alignas(16) GPUBVHNode   // 强制整个结构体的对齐方式为 16 字节边界
+{
+    glm::vec3 aabbMin;          // 包围盒的最小顶点坐标
+    int leftChild;              // 内部节点填左孩子下标，叶子填-1
+                                // 这个int紧跟在vec3后面，会被塞进vec3的16字节对齐槽里，不会额外占空间
+
+    glm::vec3 aabbMax;
+    int rightChild;             // 内部节点填左孩子下标，叶子填图元下标
+
+    int isLeaf;                 // 1 叶子，0 内部节点
+    float pad0, pad1, pad2;     // 凑齐16字节，避免下一个node因为对齐产生偏移
+};
+// 所以最终一个 bvhnode占用48字节
+// 为何在CPU端要这样设计节点？
+// std430规则下vec3本身要按16字节对齐，正好剩一个4字节空当，编译器会自动把紧跟着的float塞进去，不会浪费也不会错位，这是个很常用的省内存技巧。
+
+struct GPUSphere 
+{
+    glm::vec3 center;
+    float radius;
+
+    int materialId; // Day26要用，先占位填0
+    float pad0, pad1, pad2;
+};
+
+class BVHFlattener
+{
+    public:
+        std::vector<GPUBVHNode> flatNodes;
+        std::vector<GPUSphere> flatSpheres;
+
+        // 入口：传入根节点，返回根节点在flatNodes里的下标
+        int flatten(shared_ptr<hittable> root)
+        {
+            return flattenNode(root);
+        }
+
+    private:
+        int flattenNode(shared_ptr<hittable> node)
+        {
+            auto asBVH = std::dynamic_pointer_cast<bvh_node>(node);
+
+            if (asBVH)
+            {
+                // 如果是内部节点，先递归拍平左右孩子，得到他们在数组中的索引
+                int leftIdx = flattenNode(asBVH->left);
+                int rightIdx = flattenNode(asBVH->right);
+
+                aabb box = asBVH->bbox;
+                GPUBVHNode gpuNode;
+                gpuNode.aabbMin = glm::vec3(box.min().x(), box.min().y(), box.min().z());
+                gpuNode.aabbMax = glm::vec3(box.max().x(), box.max().y(), box.max().z());
+                gpuNode.leftChild = leftIdx;
+                gpuNode.rightChild = rightIdx;
+                gpuNode.isLeaf = 0;
+
+                flatNodes.push_back(gpuNode);
+                return (int)flatNodes.size() - 1;
+            }
+            else
+            {
+                // 是叶子：node直接是一个球
+                auto s = std::dynamic_pointer_cast<sphere>(node);
+                GPUSphere gpuSphere;
+                gpuSphere.center = glm::vec3(s->center.x(), s->center.y(), s->center.z());
+                gpuSphere.radius = s->radius;
+                gpuSphere.materialId = 0;
+                flatSpheres.push_back(gpuSphere);
+                int sphereIdx = (int)flatSpheres.size() - 1;
+
+                aabb box;
+                node->bounding_box(box);
+                GPUBVHNode gpuNode;
+                gpuNode.aabbMin = glm::vec3(box.min().x(), box.min().y(), box.min().z());
+                gpuNode.aabbMax = glm::vec3(box.max().x(), box.max().y(), box.max().z());
+                gpuNode.leftChild = -1;
+                gpuNode.rightChild = sphereIdx; // leaf节点复用rightChild字段存图元下标
+                gpuNode.isLeaf = 1;
+
+                flatNodes.push_back(gpuNode);
+                return (int)flatNodes.size() - 1;
+            }
+        }
+};
+
+#endif
+```
+
+</details>
+
+特别注意里面新类`BVHFlattener`，这个就是在 **CPU端拍平树的关键！** 还应注意的是C++里`GPUSphere`、`BVHFlattener` **数据结构的定义**
+
+<details>
+<summary>raytrace.comp完整文件</summary>
+
+```glsl
+#version 430 core
+
+layout(local_size_x = 16, local_size_y = 16) in;
+layout(rgba32f, binding = 0) uniform image2D outputImage;
+
+const float INF = uintBitsToFloat(0x7F800000u);
+
+// 相机参数
+uniform vec3 camOrigin;
+uniform vec3 camLowerLeftCorner;
+uniform vec3 camHorizontal;
+uniform vec3 camVertical;
+
+// bvh 根节点索引
+uniform int bvhRootIndex;
+
+struct BVHNode 
+{
+    vec3 aabbMin;
+    int leftChild;
+    vec3 aabbMax;
+    int rightChild;
+    int isLeaf;
+    float pad0, pad1, pad2;
+};
+
+struct Sphere 
+{
+    vec3 center;
+    float radius;
+    int materialId;
+    float pad0, pad1, pad2;
+};
+
+// 声明着色器存储缓冲区SSBO
+layout(std430, binding = 1) readonly buffer BVHBuffer {BVHNode nodes[];};
+layout(std430, binding = 2) readonly buffer SphereBuffer {Sphere spheres[];};
+
+// 光线与球体求交，返回命中距离，没命中返回-1.0
+float hitSphere(vec3 center, float radius, vec3 rayOrigin, vec3 rayDir, float t_min, float t_max)
+{
+    vec3 oc = rayOrigin - center;
+    float a = dot(rayDir, rayDir);
+    float halfB = dot(oc, rayDir);
+    float c = dot(oc, oc) - radius * radius;
+
+    float discriminant = halfB * halfB - a * c;
+
+    if (discriminant < 0.0) return -1.0;
+
+    float root = (-halfB - sqrt(discriminant)) / a;
+    if (!(root > t_min && root < t_max))
+    {
+        root = (-halfB + sqrt(discriminant)) / a;
+        if (!(root > t_min && root < t_max))
+            return -1.0;
+    }
+    return root;
+}
+
+// 包围盒求交，slab方法
+bool aabbHit(vec3 boxMin, vec3 boxMax, vec3 rayOrigin, vec3 rayDir, float tMax)
+{
+    float tmin = 0.0;      // 光线起点内部视为 0
+    float tmax = tMax;
+
+    for (int i = 0; i < 3; ++i) 
+    {
+        float invD = 1.0 / rayDir[i];
+        float t0 = (boxMin[i] - rayOrigin[i]) * invD;
+        float t1 = (boxMax[i] - rayOrigin[i]) * invD;
+        if (invD < 0.0) 
+        {   // 确保 t0 是近面，t1 是远面
+            float tmp = t0; t0 = t1; t1 = tmp;
+        }
+        tmin = max(tmin, t0);
+        tmax = min(tmax, t1);
+        if (tmax <= tmin)
+            return false;
+    }
+    return true;
+}
+
+// BVH遍历器，参数输出命中球的索引以及命中距离
+bool traverseBVH(vec3 rayOrigin, vec3 rayDir, out int hitSphereIdx, out float hitT)
+{
+    int stack[32];
+    int stackPtr = 0;
+    stack[stackPtr++] = bvhRootIndex; // 根节点
+
+    hitT = INF;
+    bool hitAnything = false;
+
+    while (stackPtr > 0)
+    {
+        int nodeIdx = stack[--stackPtr];
+        BVHNode node = nodes[nodeIdx];
+
+        if (!aabbHit(node.aabbMin, node.aabbMax, rayOrigin, rayDir, hitT))
+            continue;
+        
+        if (node.isLeaf == 1)
+        {
+            int sIdx = node.rightChild; // leaf节点里rightChild存的是图元下标
+            float t = hitSphere(spheres[sIdx].center, spheres[sIdx].radius, rayOrigin, rayDir, 0.0001, hitT);
+            if (t != -1.0)
+            {
+                hitT = t;
+                hitSphereIdx = sIdx;
+                hitAnything = true;
+            }
+        }
+        else
+        {
+            stack[stackPtr++] = node.leftChild;
+            stack[stackPtr++] = node.rightChild;
+        }
+    }
+    return hitAnything;
+}
+
+
+vec3 rayColor(vec3 rayOrigin, vec3 rayDir)
+{
+    int hitSphereIdx;
+    float t;
+    bool hit = traverseBVH(rayOrigin, rayDir, hitSphereIdx, t);
+
+    if (hit)
+    {
+        Sphere s = spheres[hitSphereIdx];
+        vec3 hitPoint = rayOrigin + rayDir * t;
+        vec3 normal = normalize(hitPoint - s.center);
+
+        return 0.5 * (normal + vec3(1.0));
+    }
+    
+    vec3 unitDir = normalize(rayDir);
+    float a = 0.5 * (unitDir.y + 1.0);
+    return (1.0 - a) * vec3(1.0) + a * vec3(0.5, 0.7, 1.0); 
+}
+
+
+
+void main()
+{
+    ivec2 pixelCoord = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 imageSize = imageSize(outputImage);
+    if (pixelCoord.x >= imageSize.x || pixelCoord.y >= imageSize.y) return;
+
+    float u = float(pixelCoord.x) / float(imageSize.x);
+    float v = float(pixelCoord.y) / float(imageSize.y);
+
+    vec3 rayDir = normalize(camLowerLeftCorner + u * camHorizontal + v * camVertical - camOrigin);
+    vec3 color = rayColor(camOrigin, rayDir);
+
+    imageStore(outputImage, pixelCoord, vec4(color, 1.0));
+}
+```
+</details>
+
+我们在GPU里完成对bvh节点数组的遍历，对aabb包围盒的求交。
+
+为了使main不臃肿，新建一个gpu_buffer.h，来创建 SSBO，然后再创建一个 scene.h 来构建场景。
+
+<details>
+<summary> gpu_buffer.h完整文件</summary>
+
+```cpp
+#ifndef GPU_BUFFER_H
+#define GPU_BUFFER_H
+
+#include <glad/glad.h>
+#include "bvh.h"
+#include <vector>
+
+GLuint createBVHSSBO(const std::vector<GPUBVHNode>& nodes)
+{
+    GLuint ssbo;
+    glGenBuffers(1, &ssbo);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, nodes.size() * sizeof(GPUBVHNode), nodes.data(), GL_STATIC_DRAW);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, ssbo);// 注意这里对应的binding序号
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+
+    return ssbo;
+}
+
+GLuint createShereSSBO(const std::vector<GPUSphere>& spheres)
+{
+    
+    GLuint ssbo;
+    glGenBuffers(1, &ssbo);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, spheres.size() * sizeof(GPUSphere), spheres.data(), GL_STATIC_DRAW);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, ssbo);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+
+    return ssbo;
+}
+#endif
+```
+
+</details>
+
+
+<details>
+<summary>scene.h完整文件 </summary>
+
+```cpp
+#ifndef SCENE_H
+#define SCENE_H
+
+#include "bvh.h"
+
+hittable_list createScene()
+{
+    hittable_list world;
+
+
+    world.add(
+        make_shared<sphere>(
+            vec3(0,0,-1),
+            0.5f
+        )
+    );
+
+
+    world.add(
+        make_shared<sphere>(
+            vec3(1,0,-2),
+            0.5f
+        )
+    );
+
+
+    world.add(
+        make_shared<sphere>(
+            vec3(-1,0,-2),
+            0.5f
+        )
+    );
+
+
+    return world;
+}
+
+#endif
+```
+
+</details>
+
+d
+<details>
+<summary>main.cpp</summary>
+
+```cpp
+// main函数里
+    Shader raytraceProgram = Shader::computeShader("src/shaders/raytrace.comp");
+    Shader quadProgram = Shader::graphicsShader("src/shaders/quad.vert", "src/shaders/quad.frag");
+
+    //----------- 场景构建---------------
+    hittable_list world = createScene();
+
+    //----------- 构建BVH ---------------
+    auto bvh = make_shared<bvh_node>(world.objects, 0, world.objects.size());
+    //----------- flatten --------------
+    BVHFlattener flattener;
+    int rootIndex = flattener.flatten(bvh);
+    //----------- 上传 GPU --------------
+    static_assert(sizeof(GPUBVHNode) == 48, "GPUBVHNode must be 48 bytes");
+    static_assert(sizeof(GPUSphere)  == 32, "GPUSphere must be 32 bytes");
+    createBVHSSBO(flattener.flatNodes);
+    createShereSSBO(flattener.flatSpheres);
+```
+
+</details>
 
