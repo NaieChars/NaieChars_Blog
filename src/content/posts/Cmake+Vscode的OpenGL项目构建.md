@@ -21,7 +21,7 @@ draft: false
 
 ### 你会用到的 VSCode 扩展
 - CMake Tools
-- Shader languages support for VS Code
+- GLSL Complete Support
 
 
 ## 第一步、在本地创建新项目
