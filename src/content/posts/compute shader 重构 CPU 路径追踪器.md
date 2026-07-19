@@ -1,5 +1,5 @@
 ---
-title: Compute Shader 重构 CPU 路径追踪器
+title: Compute Shader 重构 CPU 路径追踪器完整实现
 published: 2026-07-18
 pinned: true
 description: 前段时间我按照 RTIOW 和 RTINW 搭建了一个 CPU 路径追踪器，实际渲染速度非常慢，于是我打算用 Compute Shader 重构一下。这其中会涉及到从 CPU 编程到 GPU 编程的思维转变，以及怎么写一个 Compute Shader。本文记录了我重构的完整过程以及一些经验技巧。
@@ -1050,7 +1050,7 @@ hittable_list createScene()
 
 >
 
-# GPU 的随机数生成
+# GPU 的随机数生成与材质系统移植
 ## GPU 随机数生成器：PCG哈希
 C++的`std::mt19937`是一个有状态的对象，每次调用会修改内部状态、下次调用产生不同的数——这个模型在GPU上完全不适用，因为几千个线程如果共享一个"状态对象"会产生数据竞争，而每个线程各自维护一个独立的mt19937实例又太重（占用寄存器多，性能差）。
 GPU上标准做法是用哈希函数模拟随机数：给定一个整数种子，哈希出另一个"看起来随机"的整数，没有全局状态，纯函数。PCG是业界最常用的一种，速度快、分布质量好。
@@ -1451,3 +1451,166 @@ uint32_t frameCount = 0;
 raytraceProgram.setInt("frameCount", (int)frameCount);
 frameCount++;
 ```
+
+---
+
+# 渐进式累积渲染
+
+`outputImage` 不再保存当前帧颜色，而是保存**所有历史样本的累积和**。显示时再除以采样次数得到平均颜色，并进行 Gamma 校正。
+
+
+### 为 Shader 类添加 `setUint`
+
+在 `src/Shader.h` 的 `Shader` 类 `public` 区域，添加：
+
+<details>
+<summary>Shader.h</summary>
+
+```cpp
+void setUint(const std::string& name, unsigned int v) const {
+    glUniform1ui(glGetUniformLocation(program, name.c_str()), v);
+}
+```
+
+</details>
+
+
+### 修改 `raytrace.comp`
+
+#### （1）允许 Compute Shader 读写纹理
+
+
+<details>
+<summary>main.cpp</summary>
+
+```cpp
+glBindImageTexture(0, outputTexture, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA32F);
+```
+
+</details>
+
+
+<details>
+<summary>main.cpp</summary>
+
+```cpp
+glBindImageTexture(0, outputTexture, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA32F);
+```
+
+</details>
+
+
+
+#### （2）累积样本
+
+将 `main()` 替换为：
+
+<details>
+<summary>raytrace.comp</summary>
+
+```glsl
+void main() {
+    ivec2 pixelCoord = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 imgSize = imageSize(outputImage);
+    if (pixelCoord.x >= imgSize.x || pixelCoord.y >= imgSize.y) return;
+
+    uint rngState = initRNG(pixelCoord, imgSize, frameCount);
+
+    float u = (float(pixelCoord.x) + randFloat(rngState)) / float(imgSize.x);
+    float v = (float(pixelCoord.y) + randFloat(rngState)) / float(imgSize.y);
+
+    vec3 rayDir = camLowerLeftCorner + u * camHorizontal + v * camVertical - camOrigin;
+    vec3 newSample = rayColor(camOrigin, rayDir, rngState);
+
+    // 读取之前累积的样本和；第0帧时outputImage里是未初始化的垃圾数据，
+    // 所以第0帧不读，直接把newSample当作起始值，避免脏数据污染结果
+    vec3 previousSum = vec3(0.0);
+    if (frameCount > 0u) {
+        previousSum = imageLoad(outputImage, pixelCoord).rgb;
+    }
+
+    vec3 newSum = previousSum + newSample;
+    imageStore(outputImage, pixelCoord, vec4(newSum, 1.0));
+}
+```
+
+</details>
+
+> `frameCount == 0` 时不能读取纹理，否则会把未初始化的数据累积进去。
+
+
+
+### 修改 `quad.frag`
+
+负责计算平均颜色，并补上 RTIOW 的 Gamma 校正。
+
+<details>
+<summary>quad.frag</summary>
+
+```glsl
+#version 430 core
+
+in vec2 texCoord;
+out vec4 fragColor;
+
+uniform sampler2D screenTexture;
+uniform int sampleCount; // 目前累积了多少帧,用来求平均值
+
+void main() {
+    vec3 sum = texture(screenTexture, texCoord).rgb;
+    vec3 color = sum / float(sampleCount);
+
+    // gamma校正,对应RTIOW的write_color()里那句sqrt(color)
+    // 之前GPU版本一直漏了这一步,画面会比CPU版本偏暗,现在补上对齐
+    color = sqrt(max(color, vec3(0.0)));
+
+    fragColor = vec4(color, 1.0);
+}
+```
+
+</details>
+
+
+### 修改 `main.cpp`
+
+增加帧计数，并将样本数传给 Compute Shader 和 Fragment Shader。
+
+<details>
+<summary>main.cpp</summary>
+
+```cpp
+uint32_t frameCount = 0;
+while (!glfwWindowShouldClose(window)) {
+    raytraceProgram.use();
+    glBindImageTexture(0, outputTexture, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA32F); // 改动:WRITE_ONLY -> READ_WRITE
+
+    // 相机、球体等uniform设置保持不变,这里省略(你原来怎么写的不用动)
+
+    raytraceProgram.setUint("frameCount", frameCount); // 改动:setInt -> setUint,修复类型不匹配的bug
+
+    GLuint groupsX = (SCR_WIDTH + 15) / 16;
+    GLuint groupsY = (SCR_HEIGHT + 15) / 16;
+    glDispatchCompute(groupsX, groupsY, 1);
+    glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+
+    glClear(GL_COLOR_BUFFER_BIT);
+    quadProgram.use();
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, outputTexture);
+    quadProgram.setInt("screenTexture", 0);
+    quadProgram.setInt("sampleCount", (int)(frameCount + 1)); // 新增:告诉fragment shader目前累积了几帧
+
+    glDrawArrays(GL_TRIANGLES, 0, 3);
+
+    glfwSwapBuffers(window);
+    glfwPollEvents();
+
+    frameCount++; // 放在循环最后,累加帧数
+}
+```
+
+</details>
+
+> `sampleCount` 使用 `frameCount + 1`，因为 `frameCount` 从 **0** 开始计数，而第 **0** 帧已经产生了 **1** 个有效样本。这样计算平均值时不会出现偏亮或偏暗的问题。
+
+
