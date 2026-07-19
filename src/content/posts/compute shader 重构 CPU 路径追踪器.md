@@ -9,10 +9,10 @@ draft: false
 ---
 
 > [!NOTE]
-阅读前，请确保你有一定的 OpenGL 基础，以及已经跟着《Ray Tracing in Next Week》完成了一遍 CPU 路径追踪器搭建  
+阅读前，请确保你有一定的 OpenGL 基础，且已经跟着《Ray Tracing in Next Week》完成了一遍 CPU 路径追踪器搭建  
 为了节省空间，本文的代码均折叠了起来，需要你手动展开。同时，每一个代码块都已经写好了详细的注释，方便逐行理解。   
 由于我也是第一次接触 Comepute Shader，我会**从最开始写起**。为了回忆之前所学，我在一些基础的 OpenGL 内容后面也给了详细解释。  
-至于为什么要如此详细地给出完整代码，是因为给读者节约点自己架构的时间（懒人模式）
+至于为什么要如此详细地给出完整代码，是为了给读者节约点自己架构的时间（懒人模式）
 >
 
 ---
@@ -546,7 +546,7 @@ glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
 #### GPU 渲染每一帧
 派发线程，每个线程进行 BVH 求交，着色，写入纹理等等
 
-## 对 CPU 端进行重构
+## 对 CPU 端进行 BVH 重构
 BVH 重构可谓是相当有挑战的一部分，下面我们的工作核心是：**将面向对象的递归场景树，彻底拍平为 GPU 可用的扁平数组，同时消除运行时多态。**
 
 下面只给出了核心函数与文件（有较为详细注释），具体的C++类的改写还得自己来。这一步暂时不管材质和动态模糊（我真的不喜欢动态模糊，所以我把抽象类的接口以及球的构造函数改成了无动态模糊的类型），可以直接从 RTINW 迁移过来的Cpp文件有：aabb.h, bvh.h, hittable_list.h, hittable.h, rtweekend.h,  sphere.h, vec3.h  
@@ -1016,7 +1016,7 @@ hittable_list createScene()
 
 </details>
 
-d
+
 <details>
 <summary>main.cpp</summary>
 
@@ -1042,3 +1042,412 @@ d
 
 </details>
 
+正常渲染结果应该是屏幕中有三个球，都是紫色渐变。
+
+
+> [!tip]
+**在GPU内编码少用else-if分支：线程束发散**，GPU 以 warp（通常 32 个线程）为单位执行指令。当同一 warp 内的线程因 if-else 走入不同分支时，它们只能串行执行，这直接导致并行效率减半甚至更低，且分支内部计算越重，浪费越严重。
+
+>
+
+# GPU 的随机数生成
+## GPU 随机数生成器：PCG哈希
+C++的`std::mt19937`是一个有状态的对象，每次调用会修改内部状态、下次调用产生不同的数——这个模型在GPU上完全不适用，因为几千个线程如果共享一个"状态对象"会产生数据竞争，而每个线程各自维护一个独立的mt19937实例又太重（占用寄存器多，性能差）。
+GPU上标准做法是用哈希函数模拟随机数：给定一个整数种子，哈希出另一个"看起来随机"的整数，没有全局状态，纯函数。PCG是业界最常用的一种，速度快、分布质量好。
+
+在 `raytrace.comp` 里加：
+
+```glsl
+// PCG哈希，输入一个整数种子，输出另一个"随机"整数
+uint pcgHash(uint input_)
+{
+    uint state = input_ * 747796405u + 2891336453u;                         // 线性同余生成器公式，新状态 = 旧状态 × 大奇数 + 另一个大奇数，两个奇数是PCG 作者精心挑选的“魔法数字”
+    uint word = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;    // 旋转+乘法，用数据本身的几个高位去决定怎样搅动剩下的位
+    return (word >> 22u) ^ word;
+}
+
+// 每个线程调用后，rngState会被更新，下次调用产生不同的数
+float randFloat(inout uint rngState)
+{
+    rngState = pcgHash(rngState);           // 更新状态
+    return float(rngState) / 4294967296.0;  // 除以 2^32，映射到 [0,1)
+}
+
+// 给每个线程发独一无二的种子
+uint initRNG(ivec2 pixelCoord, ivec2 imgSize, uint frameCount) 
+{
+    uint seed = uint(pixelCoord.x) + uint(pixelCoord.y) * uint(imgSize.x);  // 将二维像素坐标展开成一维索引seed
+    seed = seed * 719393u + frameCount * 96923u;                            // 用一个大奇数放大，免相邻种子在经过 pcgHash 后产生的序列仍有微弱关联。引入帧数，让同一像素在不同帧的种子完全不同
+    return pcgHash(seed);
+}
+```
+
+**为什么要结合frameCount**：如果只用像素坐标做种子，同一个像素每一帧都会用完全一样的种子，产生一模一样的随机序列——这样多帧累积的时候，噪点不会被平均掉，因为每帧的"随机"抖动其实都相同。
+
+再加两个基于`randFloat`的辅助函数，对应RTIOW里`random_in_unit_sphere()`和`random_unit_vector()`：
+
+<details>
+<summary>两个重要的随机采样函数</summary>
+
+```glsl
+// 对应RTIOW的random_unit_vector()，用解析公式直接生成单位球面上均匀分布的点
+vec3 randomUnitVector(inout uint rngState) 
+{
+    float z = randFloat(rngState) * 2.0 - 1.0;
+    float a = randFloat(rngState) * 2.0 * PI;
+    float r = sqrt(max(0.0, 1.0 - z * z));
+    return vec3(r * cos(a), r * sin(a), z);
+}
+
+// 对应RTIOW的random_in_unit_disk()，用于metal的fuzz模糊反射
+vec2 randomInUnitDisk(inout uint rngState) 
+{
+    float a = randFloat(rngState) * 2.0 * PI;
+    float r = sqrt(randFloat(rngState));
+    return vec2(r * cos(a), r * sin(a));
+}
+
+```
+</details>
+
+## 材质系统的移植
+### 扩展BVHFlattener，拍平材质
+CPP的`material.h`包含`lambertian`/`metal`/`dielectric`三个类，都继承`material`基类，靠虚函数`scatter()`实现多态。GPU没有虚函数，处理方式只能是**打上类型标签，塞进一个统一的struct。**同时 `scatter()` 统一在 GPU 里完成
+
+在`bvh.h`里添加（这里因为我的`GPUShere`和`GPUBVHNode`在这个文件，我也只好把材质的结构体也加在此处）
+
+<details>
+<summary>bvh.h</summary>
+
+```cpp
+// 和GLSL端严格对应，注意字段顺序影响std430对齐
+struct GPUMaterial {
+    glm::vec3 albedo;  // lambertian/metal用，颜色
+    float fuzz;        // metal专用，紧跟在albedo后面，卡进vec3的对齐空当
+    float ir;          // dielectric专用，折射率
+    int type;           // 0=lambertian, 1=metal, 2=dielectric
+    float pad0, pad1;  // 凑齐32字节(16的倍数)
+};
+static_assert(sizeof(GPUMaterial) == 32, "GPUMaterial size mismatch, check alignment");
+
+...
+
+class BVHFlattener {
+public:
+    std::vector<GPUBVHNode> flatNodes;
+    std::vector<GPUSphere> flatSpheres;
+    std::vector<GPUMaterial> flatMaterials; // 新增
+
+    int flatten(shared_ptr<hittable> root) {
+        return flattenNode(root);
+    }
+
+private:
+    // 材质去重：同一个material对象可能被多个球共用，避免重复存储
+    std::unordered_map<material*, int> materialCache;
+
+    int flattenMaterial(shared_ptr<material> mat) {
+        auto it = materialCache.find(mat.get());
+        if (it != materialCache.end()) return it->second; // 已经拍平过，直接复用下标
+
+        GPUMaterial gpuMat{};
+        if (auto lamb = std::dynamic_pointer_cast<lambertian>(mat)) {
+            gpuMat.type = 0;
+            gpuMat.albedo = glm::vec3(lamb->get_albedo().x(), lamb->get_albedo().y(), lamb->get_albedo().z());
+        } else if (auto met = std::dynamic_pointer_cast<metal>(mat)) {
+            gpuMat.type = 1;
+            gpuMat.albedo = glm::vec3(met->get_albedo().x(), met->get_albedo().y(), met->get_albedo().z());
+            gpuMat.fuzz = (float)met->get_fuzz();
+        } else if (auto diel = std::dynamic_pointer_cast<dielectric>(mat)) {
+            gpuMat.type = 2;
+            gpuMat.ir = (float)diel->get_ir();
+        }
+
+        flatMaterials.push_back(gpuMat);
+        int idx = (int)flatMaterials.size() - 1;
+        materialCache[mat.get()] = idx;
+        return idx;
+    }
+
+    int flattenNode(shared_ptr<hittable> node) {
+        auto asBVH = std::dynamic_pointer_cast<bvh_node>(node);
+
+        if (asBVH) {
+            int leftIdx  = flattenNode(asBVH->get_left());
+            int rightIdx = flattenNode(asBVH->get_right());
+
+            aabb box = asBVH->get_box();
+            GPUBVHNode gpuNode{};
+            gpuNode.aabbMin = glm::vec3(box.min().x(), box.min().y(), box.min().z());
+            gpuNode.aabbMax = glm::vec3(box.max().x(), box.max().y(), box.max().z());
+            gpuNode.leftChild = leftIdx;
+            gpuNode.rightChild = rightIdx;
+            gpuNode.isLeaf = 0;
+
+            flatNodes.push_back(gpuNode);
+            return (int)flatNodes.size() - 1;
+        } else {
+            auto s = std::dynamic_pointer_cast<sphere>(node);
+
+            GPUSphere gpuSphere{};
+            gpuSphere.center = glm::vec3(s->center.x(), s->center.y(), s->center.z());
+            gpuSphere.radius = (float)s->radius;
+            gpuSphere.materialId = flattenMaterial(s->get_material()); // 关键：把材质也拍平，记录下标
+
+            flatSpheres.push_back(gpuSphere);
+            int sphereIdx = (int)flatSpheres.size() - 1;
+
+            aabb box;
+            node->bounding_box(0, 0, box);
+            GPUBVHNode gpuNode{};
+            gpuNode.aabbMin = glm::vec3(box.min().x(), box.min().y(), box.min().z());
+            gpuNode.aabbMax = glm::vec3(box.max().x(), box.max().y(), box.max().z());
+            gpuNode.leftChild = -1;
+            gpuNode.rightChild = sphereIdx;
+            gpuNode.isLeaf = 1;
+
+            flatNodes.push_back(gpuNode);
+            return (int)flatNodes.size() - 1;
+        }
+    }
+};
+```
+</details>
+
+然后在 `gpu_buffer.h` 里传 SSBO 即可，这里注意是 `binding = 3`
+
+### GLSL 端完善 hit record
+
+之前的`hitSphere`只返回一个距离`t`，现在散射需要交点坐标、法线方向、材质id，得升级成完整的"hit record"，traverseBVH也得跟着更新
+
+<details>
+<summary>raytrace.comp</summary>
+
+```glsl
+struct HitRecord
+{
+    vec3 point;
+    vec3 normal;
+    float t;
+    int materialId;
+    bool frontFace; // 折射时用到，光线从内部还是外部打到球
+};
+
+struct Material
+{
+    glm::vec3 albedo;   // lambertian/metal 用颜色
+    float fuzz;         // metal专用，紧跟在albedo后面，卡进vec3的对齐空当
+    float ir;           // dielectric专用，折射率
+    int type;           // 0=lambertian, 1=metal, 2=dielectric
+    float pad0, pad1;
+};
+
+layout(std430, binding = 3) readonly buffer MaterialBuffer {Material materials[];};
+
+// ------------------- 核心计算：光线求交----------------------
+// 光线与球体求交
+bool hitSphere(Sphere s, vec3 rayOrigin, vec3 rayDir, float t_min, float t_max, out HitRecord rec)
+{
+    vec3 oc = rayOrigin - s.center;
+    float a = dot(rayDir, rayDir);
+    float halfB = dot(oc, rayDir);
+    float c = dot(oc, oc) - s.radius * s.radius;
+    float discriminant = halfB * halfB - a * c;
+    if (discriminant < 0.0) return false;
+
+    float root = (-halfB - sqrt(discriminant)) / a;
+    if (!(root > t_min && root < t_max))
+    {
+        root = (-halfB + sqrt(discriminant)) / a;
+        if (!(root > t_min && root < t_max))
+            return false;
+    }
+
+    rec.t = root;
+    rec.point = rayOrigin + root * rayDir;
+    vec3 outwardNormal = (rec.point - s.center) / s.radius;
+    rec.frontFace = dot(rayDir, outwardNormal) < 0.0;
+    rec.normal = rec.frontFace ? outwardNormal : -outwardNormal;
+    rec.materialId = s.materialId;
+    return true;
+}
+
+// BVH遍历器，参数输出命中球的索引以及命中距离
+bool traverseBVH(vec3 rayOrigin, vec3 rayDir, float tMin, float tMax, out HitRecord rec)
+{
+    int stack[32];
+    int stackPtr = 0;
+    stack[stackPtr++] = bvhRootIndex; 
+
+    HitRecord tempRec;
+    float closestSoFar = tMax;
+    bool hitAnything = false;
+
+    while (stackPtr > 0)
+    {
+        int nodeIdx = stack[--stackPtr];
+        BVHNode node = nodes[nodeIdx];
+
+        if (!aabbHit(node.aabbMin, node.aabbMax, rayOrigin, rayDir, closestSoFar))
+            continue;
+        
+        if (node.isLeaf == 1)
+        {
+            int sIdx = node.rightChild;
+            if (hitSphere(spheres[sIdx], rayOrigin, rayDir, tMin, closestSoFar, tempRec))
+            {
+                closestSoFar = tempRec.t;
+                rec = tempRec;
+                hitAnything = true;
+            }
+        }
+        else
+        {
+            stack[stackPtr++] = node.leftChild;
+            stack[stackPtr++] = node.rightChild;
+        }
+    }
+    return hitAnything;
+}
+```
+</details>
+
+### 材质散射函数
+
+在 `raytrace.comp` 添加三种材质的散射函数
+
+<details>
+<summary>scatter函数</summary>
+
+```glsl
+// ------------------------- 散射 --------------------------------
+// 返回值：是否发生散射(dielectric/lambertian/metal理论上总会散射，
+// 但metal在极端角度下反射方向可能指向物体内部，这时候算作被吸收)
+// scatteredDir: 散射后的新射线方向
+// attenuation: 这次散射的反射率，为什么是albedo？还剩下的颜色可以理解为还剩的能量，满能量就是白光vec3(1.0)
+bool scatter(HitRecord rec, vec3 rayDir, inout uint rngState, out vec3 scatteredDir, out vec3 attenuation)
+{
+    Material mat = materials[rec.materialId];
+
+    if (mat.type == 0)
+    {
+        // ---- Lambertian ----
+        vec3 scatterDir = rec.normal + randomUnitVector(rngState);
+        // 退化情况处理：如果随机方向正好和法线反向抵消，方向会变成接近0的向量
+        if (length(scatterDir) < 1e-4) scatterDir = rec.normal;
+        scatteredDir = normalize(scatterDir);
+        attenuation = mat.albedo;
+        return true;
+    }
+    else if (mat.type == 1)
+    {
+        // ---- Metal ----
+        vec3 reflected = reflect(normalize(rayDir), rec.normal);
+        vec2 fuzzOffset = randomInUnitDisk(rngState) * mat.fuzz;
+        scatteredDir = normalize(reflected + vec3(fuzzOffset, 0.0));
+        attenuation = mat.albedo;
+        return dot(scatteredDir, rec.normal) > 0.0; // 模糊后如果方向钻进物体内部,视为被吸收
+    }
+    else
+    {
+        // ---- Dielectric(玻璃) ----
+        attenuation = vec3(1.0); // 玻璃不吸收颜色
+        float refractionRatio = rec.frontFace ? (1.0 / mat.ir) : mat.ir;
+
+        vec3 unitDir = normalize(rayDir);
+        float cosTheta = min(dot(-unitDir, rec.normal), 1.0);
+        float sinTheta = sqrt(1.0 - cosTheta * cosTheta);
+
+        bool cannotRefract = refractionRatio * sinTheta > 1.0;
+
+        // Schlick近似，对应RTIOW的reflectance()函数
+        float r0 = (1.0 - refractionRatio) / (1.0 + refractionRatio);
+        r0 = r0 * r0;
+        float reflectance = r0 + (1.0 - r0) * pow(1.0 - cosTheta, 5.0);
+
+        if (cannotRefract || reflectance > randFloat(rngState)) 
+        {
+            scatteredDir = reflect(unitDir, rec.normal);
+        } else 
+        {
+            scatteredDir = refract(unitDir, rec.normal, refractionRatio);
+        }
+        return true;
+    }
+}
+```
+</details>
+
+### 主循环：多次反弹的迭代路径追踪
+
+`ray_color()`改成固定次数的for循环，一旦没命中或者达到最大深度就提前跳出：
+
+<details>
+</summary>ray_color()与main()</summary>
+
+```glsl
+// ----------------------- Draw! ---------------------------
+vec3 rayColor(vec3 rayOrigin, vec3 rayDir, inout uint rngState)
+{
+    vec3 attenuation = vec3(1.0);
+    int maxDepth = 16;
+    
+    for (int depth = 0; depth < maxDepth; depth++)
+    {
+        HitRecord rec;
+        if (traverseBVH(rayOrigin, rayDir, 0.0001, INF, rec))
+        {
+            vec3 scatteredDir;
+            vec3 matAttenuation;
+            if (scatter(rec, rayDir, rngState, scatteredDir, matAttenuation))
+            {
+                attenuation *= matAttenuation;
+                rayOrigin = rec.point;
+                rayDir = scatteredDir;
+            }
+            else
+            {
+                return vec3(0.0);
+            }
+        }
+        else
+        {
+            vec3 unitDir = normalize(rayDir);
+            float a = 0.5 * (unitDir.y + 1.0);
+            vec3 skyColor = (1.0 - a) * vec3(1.0) + a * vec3(0.5, 0.7, 1.0); 
+            return attenuation * skyColor;
+        }
+    }
+    return vec3(0.0); // 超过最大深度还没跳出，视为完全吸收
+}
+
+
+//-------------------- main ----------------------
+void main()
+{
+    ivec2 pixelCoord = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 imageSize = imageSize(outputImage);
+    if (pixelCoord.x >= imageSize.x || pixelCoord.y >= imageSize.y) return;
+
+    uint rngState = initRNG(pixelCoord, imageSize, frameCount);
+
+    float u = (float(pixelCoord.x) + randFloat(rngState)) / float(imageSize.x);     // 随机偏移做抗锯齿
+    float v = (float(pixelCoord.y) + randFloat(rngState)) / float(imageSize.y);
+
+    vec3 rayDir = normalize(camLowerLeftCorner + u * camHorizontal + v * camVertical - camOrigin);
+    vec3 color = rayColor(camOrigin, rayDir, rngState);
+
+    imageStore(outputImage, pixelCoord, vec4(color, 1.0));
+}
+```
+
+</details>
+
+最后在CPU端`main.cpp`主循环里加一个frameCount计数器：
+
+```
+uint32_t frameCount = 0;
+// ...主循环内，dispatch之前
+raytraceProgram.setInt("frameCount", (int)frameCount);
+frameCount++;
+```
