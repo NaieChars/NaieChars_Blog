@@ -21,7 +21,7 @@ draft: false
 
 ### 你会用到的 VSCode 扩展
 - CMake Tools
-- GLSL Complete Support
+- glsl_analyzer
 
 
 ## 第一步、在本地创建新项目
