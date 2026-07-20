@@ -1613,4 +1613,126 @@ while (!glfwWindowShouldClose(window)) {
 
 > `sampleCount` 使用 `frameCount + 1`，因为 `frameCount` 从 **0** 开始计数，而第 **0** 帧已经产生了 **1** 个有效样本。这样计算平均值时不会出现偏亮或偏暗的问题。
 
+# MIS
+## ONB
+在处理漫反射方向采样时，我们需要"围绕法线建一个局部坐标系"，才能把"局部空间里的采样方向"转换成"世界空间方向"。这就是ONB（orthonormal basis，正交基）的作用——想象法线是这个局部坐标系的z轴，我们随便找两个跟它垂直的向量当x轴、y轴，就能把任意局部方向转换到世界空间。
+
+```glsl
+// ------------------- ONB 工具函数 --------------------------
+struct ONB
+{
+    vec3 u, v, w;
+};
+
+// 围绕normal构建一个正交基,w轴对齐normal方向
+ONB buildONB(vec3 normal)
+{
+    ONB basis;
+    basis.w = normalize(normal);
+    // 选一个不平行w的向量a，来计算叉乘求出另两个分量
+    // 如果w的x分量接近1，那a取(0,1,0)，否则就取(1,0,0)
+    vec3 a = (abs(basis.w.x) > 0.9) ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);
+    basis.v = normalize(cross(basis.w, a));
+    basis.u = cross(basis.w, basis.v);
+    return basis;
+}
+
+// 把局部坐标p转换到这个正交基所在的世界空间方向
+vec3 onbLocal(ONB basis, vec3 p)
+{
+    return p.x * basis.u + p.y * basis.v + p.z * basis.w;
+}
+```
+
+## 精确的余弦分布采样
+
+```glsl
+/ 在ONB局部空间里,按余弦加权分布采样一个方向(概率正比于cos(theta))
+// 这是Malley's Method:先在圆盘上均匀采样,再投影到半球
+vec3 randomCosineDirection(inout uint rngState)
+{
+    float r1 = randFloat(rngState);
+    float r2 = randFloat(rngState);
+    float phi = 2.0 * PI * r1;
+    float x = cos(phi) * sqrt(r2);
+    float y = sin(phi) * sqrt(r2);
+    float z = sqrt(1.0 - r2);
+    return vec3(x, y, z);
+}
+
+// 给定一个已经采样出来的方向,反过来算它在余弦分布下的概率密度
+// 公式:p(direction) = cos(theta) / pi
+float cosinePdf(vec3 direction, vec3 normal)
+{
+    float cosTheta = dot(normalize(direction), normal);
+    return max(cosTheta, 0.0) / PI;
+}
+```
+
+## 光源锥体采样+多光源平均pdf
+
+```glsl
+// 在着色点处生成一个指向球体光源的随机方向，方向被限制在一个锥体内，锥体大小正好覆盖远处光源球
+// distanceSquared：当前着色点与光源球球心的距离平方
+// radius：光源球的半径
+vec3 randomToShpere(float radius, float distanceSquared, inout uint rngState)
+{
+    float r1 = randFloat(rngState);
+    float r2 = randFloat(rngState);
+
+    float z = 1.0 + r2 * (sqrt(max(0.0, 1.0 - radius*radius/distanceSquared)) - 1.0);   // z=cosTheta，z 的方向：大致指向光源球心
+    float phi = 2.0 * 3.14159265 * r1;
+    float sinTheta = sqrt(max(0.0, 1.0 - z * z));
+    float x = cos(phi) * sinTheta;
+    float y = sin(phi) * sinTheta;
+    return vec3(x, y, z);
+}
+
+// 从origin生成一个指向该光源表面的随机方向，用于直接光采样。
+vec3 sampleLightDirection(Sphere light, vec3 origin, inout uint rngState)
+{
+    vec3 direction = light.center - origin;
+    float disSq = dot(direction, direction);
+    ONB basis = buildONB(direction);                                // 构建局部正交基 (ONB)
+    vec3 localDir = randomToShpere(light.radius, disSq, rngState);  // 在锥体内生成本地方向
+    return onbLocal(basis, localDir);                               // 将局部方向变换到世界空间
+}
+
+// 计算"从origin朝direction方向,恰好能打中这个光源球"这件事的立体角概率密度
+// 需要先做一次真实的求交测试,如果这个方向压根打不中球,pdf是0
+float lightPdfValue(Sphere light, vec3 origin, vec3 direction)
+{
+    HitRecord tempRec;
+    if (!hitSphere(light, origin, direction, 0.0001, INF, tempRec))
+        return 0;
+    
+    vec3 toCenterVec = light.center - origin;
+    float disSq = dot(toCenterVec, toCenterVec);
+    float cosThetaMax = sqrt(max(0.0, 1.0 - light.radius * light.radius / disSq)); // cosThetaMax：光源球半顶角的余弦值
+    float solidAngle = 2.0 * PI * (1.0 - cosThetaMax);                              // 球冠立体角公式：Ω = 2π (1 - cosθ)
+    return 1.0 / solidAngle;    // 我们在光源立体角内部采样是均匀采样方向
+}
+
+// 多光源平均 pdf
+// 这里假设"从N个光源里均匀随机选一个"来采样,所以对应的pdf也必须是"对所有光源的pdf取平均"
+float lightsPdfValue(vec3 origin, vec3 direction)
+{
+    if (lightCount == 0) return 0.0;
+    float sum = 0.0;
+    for (int i = 0; i < lightCount; i++)
+    {
+        Sphere light = spheres[lightIndices[i]];
+        sum += lightPdfValue(light, origin, direction);
+    }
+    return sum / float(lightCount);
+}
+
+vec3 sampleRandomLightDirection(vec3 origin, inout uint rngState)
+{
+    int idx = int(randFloat(rngState) * float(lightCount)); // 随机选择一个光源索引
+    idx = min(idx, lightCount - 1);                         // 防止randFloat刚好采到1.0时下标越界
+    Sphere light = spheres[lightIndices[idx]];
+    return sampleLightDirection(light, origin, rngState);
+}
+```
 
