@@ -3,7 +3,7 @@ title: 时间性抗锯齿 TAA（Temporal Anti-Aliasing）
 published: 2026-07-23
 pinned: true
 description: Temporal Anti-Aliasing (TAA) 是当今实时渲染中最核心的抗锯齿技术之一。正如NVIDIA的一篇综述所述，它可被正式定义为 “时间摊销的超采样”（temporally-amortized supersampling）本文主要是以笔记的方式呈现TAA技术，供参考学习。
-tags: [OpenGL, Compte Shader, C++, RayTracer]
+tags: [OpenGL, TAA]
 category: 技术
 draft: false
 ---
