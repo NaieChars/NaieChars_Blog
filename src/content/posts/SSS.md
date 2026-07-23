@@ -108,3 +108,102 @@ $$
 
 > [!NOTE]
 > 想要了解更加详细的数学推导以及更加精确的理论，可以查阅 Physically Based Rendering (PBRT) 中关于 BSSRDF 和随机游走章节，11章还有16.4节
+>
+
+次表面散射的随机游走模型在 OpenGL Compute Shader 里的工程实现，属于光线递进循环函数的分支（依据不同材质类型）
+
+```glsl
+else if (mat.type == 4)
+        {
+            // ---- Isotropic 体积介质 -------
+            vec3 unitDir = normalize(rayDir);
+            float cosTheta = min(dot(-unitDir, rec.normal), 1.0);
+            float iorBoundary = max(mat.iorB, 1.01); // 边界折射率,防止<=1导致数值异常
+
+            // Schlick近似,和你Day26给dielectric写的公式完全一样,这里复用同样的思路
+            float r0 = (1.0 - iorBoundary) / (1.0 + iorBoundary);
+            r0 = r0 * r0;
+            float reflectance = r0 + (1.0 - r0) * pow(1.0 - cosTheta, 5.0);
+
+            if (randFloat(rngState) < reflectance)
+            {
+                // ---- 表面反射----
+                vec3 reflected = reflect(unitDir, rec.normal);
+                rayOrigin = rec.point + rec.normal * 0.001;
+                rayDir = reflected;
+            }
+            else
+            {
+                // ---- 折射进入介质:先算出折射方向,再用这个方向开始内部随机游走 ----
+                vec3 refractedDir = refract(unitDir, rec.normal, 1.0 / iorBoundary);
+
+                Sphere mediumSphere = spheres[rec.sphereIndex];
+                float sigma_t = max(mat.ir, 0.001);
+                float scatterAlbedo = clamp(mat.fuzz, 0.0, 1.0);
+                float g = clamp(mat.iorR, -0.99, 0.99);
+
+                vec3 mediumPos = rec.point;
+                vec3 mediumDir = refractedDir; //用折射方向而不是原始rayDir作为介质内传播方向
+
+                float distToExit = sphereFarRoot(mediumSphere, mediumPos, mediumDir);
+                if (distToExit < 0.0) distToExit = mediumSphere.radius * 2.0;
+
+                bool exitedMedium = false;
+                bool absorbed = false;
+                int maxMediumBounces = 24;
+
+                for (int mBounce = 0; mBounce < maxMediumBounces; mBounce++)
+                {
+                    float freeFlight = -log(1.0 - randFloat(rngState)) / sigma_t;
+                    if (freeFlight >= distToExit)
+                    {
+                        mediumPos = mediumPos + mediumDir * distToExit;
+                        exitedMedium = true;
+                        break;
+                    }
+
+                    mediumPos = mediumPos + mediumDir * freeFlight;
+                    distToExit -= freeFlight;
+                    attenuation *= mat.albedo;
+
+                    if (randFloat(rngState) > scatterAlbedo)
+                    {
+                        absorbed = true;
+                        break;
+                    }
+
+                    float u1 = randFloat(rngState);
+                    float u2 = randFloat(rngState);
+                    float cosThetaP;
+                    if (abs(g) < 1e-3)
+                    {
+                        cosThetaP = 1.0 - 2.0 * u1;
+                    }
+                    else
+                    {
+                        float sqrTerm = (1.0 - g * g) / (1.0 + g - 2.0 * g * u1);
+                        cosThetaP = (1.0 + g * g - sqrTerm * sqrTerm) / (2.0 * g);
+                    }
+                    float sinThetaP = sqrt(max(0.0, 1.0 - cosThetaP * cosThetaP));
+                    float phi = 2.0 * PI * u2;
+
+                    ONB scatterBasis = buildONB(mediumDir);
+                    vec3 localDir = vec3(sinThetaP * cos(phi), sinThetaP * sin(phi), cosThetaP);
+                    mediumDir = normalize(onbLocal(scatterBasis, localDir));
+
+                    distToExit = sphereFarRoot(mediumSphere, mediumPos, mediumDir);
+                    if (distToExit < 0.0) distToExit = mediumSphere.radius * 2.0;
+                }
+
+                if (absorbed || !exitedMedium)
+                {
+                    validBounce = false;
+                }
+                else
+                {
+                    rayOrigin = mediumPos + mediumDir * 0.001;
+                    rayDir = mediumDir;
+                }
+            }
+        }
+```
