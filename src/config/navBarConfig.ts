@@ -148,12 +148,14 @@ export const navBarConfig: NavBarConfig = {
 			],
 		},
 
+		/*
 		// 留言板
 		{
 			name: "留言板",
 			url: "/guestbook/",
 			icon: "material-symbols:chat",
 		},
+		*/
 
 		// 自定义一级下拉菜单示例：关于相关
 		{
