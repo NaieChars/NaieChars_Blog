@@ -3,8 +3,12 @@ import type { FooterConfig } from "../types/config";
 // 页脚配置
 export const footerConfig: FooterConfig = {
 	enable: true, // 是否启用Footer HTML注入功能
-	customHtml: '<a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">蜀ICP备2026040788号-2</a>', // HTML格式的自定义页脚信息，例如备案号等，默认留空
-	// 也可以直接编辑 FooterConfig.html 文件来添加备案号等自定义内容
-	// 注意：若 customHtml 不为空，则使用 customHtml 中的内容；若 customHtml 留空，则使用 FooterConfig.html 文件中的内容
-	// FooterConfig.html 可能会在未来的某个版本弃用
+	customHtml: `
+  <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:center;font-size:14px;">
+    <img src="public/备案图标.png" alt="公安备案图标" style="width:16px;height:16px;display:inline-block;vertical-align:middle;">
+    <a href="https://beian.mps.gov.cn/#/query/webSearch?code=51010802033357" rel="noreferrer" target="_blank">川公网安备51010802033357号</a>
+    <span style="color:#999;">|</span>
+    <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">蜀ICP备2026040788号-2</a>
+  </div>
+`,
 };
