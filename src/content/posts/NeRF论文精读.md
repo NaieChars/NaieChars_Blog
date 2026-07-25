@@ -2,7 +2,7 @@
 title: 论文精读 NeRF-Representing Scenes as Neural Radiance Fields for View Synthesis
 published: 2026-07-26
 pinned: true
-description: 本节主要精读《NeRF: Representing Scenes as Neural Radiance Fields for View Synthesis》，理解体积渲染和 NeRF
+description: 本节主要精读《NeRF-Representing Scenes as Neural Radiance Fields for View Synthesis》，理解体积渲染和 NeRF
 tags: [DL, 神经网络, NeRF, 计算机视觉] 
 category: 技术
 draft: false
