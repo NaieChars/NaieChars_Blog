@@ -1,5 +1,5 @@
 ---
-title: GPU 架构与 CUDA 编程
+title: GPU 基本架构与 CUDA 编程
 published: 2026-07-27
 pinned: true
 description: 从 GPU 架构开始，依次记录了一些 CUDA 常见语法与一些常用工程技巧，属于一份偏个人向的笔记
@@ -9,16 +9,20 @@ draft: false
 ---
 
 > [!NOTE]
-> 讲解一些GPU编程知识时，会涉及到一些OpenGL Compute Shader 的知识类比
+> 讲解一些GPU编程知识时，会涉及到一些OpenGL Compute Shader 的知识类比。  
+> 建议读者学习 CUDA 时，尽量配套实现一个完整的工程项目，学习知识的同时不至于那么枯燥，同时还能了解许多 GPU 编程时的工程技巧。笔者学习 CUDA 时，顺带完成了一个物理模拟粒子系统与真实流体的项目。
 
 ## 前置知识
-这一部分很重要，能够帮助理解为什么GPU编程要这么设计，这里从**硬件架构**和**内存层次结构**两方面展开，做一次系统性总结
+这一部分**很重要**，能够帮助理解为什么一些常用的GPU工程技巧要这么设计，这里从**硬件架构**和**内存层次结构**两方面展开，做一次系统性总结
+
+> [!NOTE]
+> 关于 GPU 的一些微架构比如：Cache Hit Rate、L1/L2 Cache、Memory Throughput、Stall LG Throttle、Scoreboard等，会留到后面的一篇关于stall类型层级下的tiling性能对比文章中详细说明。如果只是浅浅应付 CUDA 编程，下面这些GPU基础知识就应该足够了。
 
 ### GPU 硬件架构
 
 #### 1.核心计算单元：流多处理器 (SM)
 SM是**GPU最基本的计算单元**，内部包含数十到上百个**CUDA核心**（负责执行整数和浮点运算）、**张量核心**（Tensor Cores，NeRF里会用到）等    
-以作者显卡为例（RTX 5060 Laptop GPU），包含SM 26组，CUDA核心3328个，张量核心104个，光线追踪核心26个，纹理单元104个，光栅单元48个
+以笔者的显卡为例（RTX 5060 Laptop GPU），包含SM 26组，CUDA核心3328个，张量核心104个，光线追踪核心26个，纹理单元104个，光栅单元48个
 
 #### 2.执行模型：SIMT (单指令多线程)
 - SIMT执行模型即：一个SM内的所有CUDA核心都听从同一个指令，但处理不同的数据。
@@ -113,6 +117,13 @@ cudaMemcpy(h_out, d_out, N * sizeof(int), cudaMemcpyDeviceToHost);
 ### cudaMalloc 与 cudaFree
 等效于C中的 `malloc` 和 `free`，只不过操作对象变成了显存。养成显式释放的良好习惯
 
+### __shared__变量修饰符
+表示这个变量**存放在共享内存里**，而不是存在显存里，使得同一个block里面的线程都可以访问。典型应用：粒子模拟中的 tiling 思想，线程 `threadIdx.x` 负责把第 tile 块里第 `threadIdx.x` 个粒子的数据，从 global memory 搬到 shared memory 数组里。
+> [!warning]
+> 这里强调一下tiling思想的一个**坑**（具体的物理模拟粒子系统理论可以链接到我的另一篇文章）
+> 在核函数里一般都会有 `if (i > n) return;` 这句，目的是过滤多余线程。但是一旦我们用了tiling思想（或者是需要线程同步执行的情况下`__syncthreads()`），就不能直接过滤掉多余线程。因为如果让多余线程提前退出，这些线程根本不会走到后面的 `__syncthreads()`，而其他线程会在那里死等——这会导致**kernel 挂起（deadlock）**
+>
+> 其实还有一个**坑**。2010年过后Fermi架构使得：当一个 warp 内所有线程请求同一个 global memory 地址时，内存控制器会把这次请求合并成一次物理内存事务，取回数据后**广播（broadcast）** 给这32个线程的寄存器，而不是发起32次独立的内存请求，实际下来tiling能捡到的优化油水非常少，尤其是对于更偏"计算密集"的kernel。（详情见粒子相关的文章）
 
 ### __device__函数修饰符
 
