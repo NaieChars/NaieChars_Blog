@@ -229,8 +229,10 @@ int main() {
 #### 首先输入：
 
 ```powershell
-cmake -B build
+cmake -B build -S .
 ```
+> [!NOTE]
+> 上面输入 `cmake -B build` 也行，因为我们是在根目录下操作的
 
 第一步成功标志是：你应该会在最后看到终端给你如下这般信息：
 
@@ -242,13 +244,16 @@ cmake -B build
 ```
 
 > [!tip]
-> 如果你已经输入并执行了上述命令，但是发现自己忘保存文件等等情况（总之就是你想重来），你可以按 CTRL + C 终止。然后输入 `Remove-Item -Recurse -Force build` 清空 build 文件夹 （**切记！**）。
+> 如果你已经输入并执行了上述命令，但是发现自己忘保存文件等等情况（总之就是你想重来），你可以按 CTRL + C 终止。然后输入 `Remove-Item -Recurse -Force build` 删除 build 文件夹 （**切记！**）。
 
 #### 接下来输入：
 
 ```powershell
-cmake --build build
+cmake --build build --config Debug
 ```
+
+> [!NOTE]
+> 上面输入 `cmake --build build` 也可以，当前状态下默认是Debug
 
 第二步成功标志是：你应该会在最后看到终端给你如下这般信息：
 
@@ -287,6 +292,14 @@ add_executable(你的项目名
 )
 ```
 
+保存文件后，在终端输入以下指令重新配置并编译
+
+```powershell
+Remove-Item -Recurse -Force build
+cmake -B build -S .
+cmake --build build --config Debug
+```
+
 #### 不需要修改 CMakeLists.txt 的情况
 修改 `main.cpp` 里的代码，在 shaders/ 里增加着色器文件（如 `.comp`、`.vert`、`.glsl`）
 
@@ -294,7 +307,7 @@ add_executable(你的项目名
 每次修改完 C++ 代码，直接输入如下指令编译并运行即可
 
 ```powershell
-cmake --build build
+cmake --build build --config Debug
 .\build\Debug\你的项目名.exe
 ```
 
