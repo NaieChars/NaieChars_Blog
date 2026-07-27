@@ -2,7 +2,7 @@
 title: GPU 架构与 CUDA 编程
 published: 2026-07-27
 pinned: true
-description: 从最基础的CUDA编程开始，记录一些基础的CUDA语法与GPU架构逻辑，属于一份偏个人向的笔记
+description: 从 GPU 架构开始，依次记录了一些 CUDA 常见语法与一些常用工程技巧，属于一份偏个人向的笔记
 tags: [CUDA]
 category: 技术
 draft: false
@@ -113,6 +113,56 @@ cudaMemcpy(h_out, d_out, N * sizeof(int), cudaMemcpyDeviceToHost);
 ### cudaMalloc 与 cudaFree
 等效于C中的 `malloc` 和 `free`，只不过操作对象变成了显存。养成显式释放的良好习惯
 
+
 ### __device__函数修饰符
 
+## 一些常用工程技巧
 
+### 实用工具宏
+这是一个很实用的错误抛出工具宏，很多项目都有它的身影，把以下内容放在文件开头
+
+```cpp
+#define CUDA_CHECK(call) do { \
+    cudaError_t err = call; \
+    if (err != cudaSuccess) { \
+        printf("CUDA error at %s:%d: %s\n", __FILE__, __LINE__, cudaGetErrorString(err)); \
+        exit(1); \
+    } \
+} while(0)
+```
+之后每次关于cuda函数的调用，都可以这样表示：
+
+```cpp
+CUDA_CHECK(cudaMalloc(...));
+CUDA_CHECK(cudaMemcpy(...));
+```
+
+### 将数据依次性打包进寄存器
+在核函数里，通常现将要传给 GPU 的数据**赋值给一个局部变量**（CUDA里，简单的局部变量（非数组、不被取地址）通常会被编译器放进寄存器），请看下面两种核函数代码:
+
+```cpp
+if (idx >= n) return;
+
+    paticles[idx].velY += gravity * dt;
+    paticles[idx].posX += paticles[idx].velX * dt;
+    paticles[idx].posY += paticles[idx].velY * dt;
+```
+
+每一行 particles[idx] 都代表一次对显存（global memory）的读写。全局内存的延迟非常高（几百个时钟周期）。
+
+```cpp
+if (idx >= n) return;
+    // 先读到寄存器里改，最后一次性写回，减少global memory访问次数
+    Particle p = particles[idx];
+
+    p.velY += gravity * dt;
+    p.posX += p.velX * dt;
+    p.posY += p.velY * dt;
+```
+
+我们将 Particles[]赋值给了一个局部变量p，其存储在寄存器里，几乎零延迟。我们**先将整个结构从全局内存一次性打包到寄存器**，寄存器里发生所有的**中间计算**，最后再把**修改结果一次性写回全局内存**。
+
+### 竞态问题
+如果一个Kernel的**计算基于旧状态**，就不能边读边写同一个数据区域，应该分成两个kernel来完成。  
+我们可以举一个引力模拟的例子：  
+每个粒子的加速度，取决于其他所有粒子当前的位置。如果在同一个 kernel 里，一边让线程 A 更新粒子 0 的位置，一边让线程 B 计算粒子 1 的受力（需要读取粒子 0 的位置），那么根据线程调度顺序不同，线程 B 可能读到的是线程 A 已经写入的新位置，这便是**竞态问题**，解决办法：把计算和更新拆成两个kernel
