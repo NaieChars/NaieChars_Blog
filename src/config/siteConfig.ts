@@ -35,9 +35,9 @@ export const siteConfig: SiteConfig = {
 		// 顶栏标题文本
 		text: "NaieChars",
 		// 顶栏标题图标路径，默认使用 public/assets/home/home.png
-		icon: "assets/home/home.png",
+		icon: "assets/home/home.webp",
 		// 网站Logo图片路径
-		logo: "assets/home/home.png",
+		logo: "assets/home/home.webp",
 	},
 
 	// 页面自动缩放配置
@@ -252,7 +252,7 @@ export const siteConfig: SiteConfig = {
 	showCoverInContent: true, // 在文章内容页显示文章封面
 	generateOgImages: false, // 启用生成OpenGraph图片功能,注意开启后要渲染很长时间，不建议本地调试的时候开启
 	favicon: [
-			{ src: "/assets/home/home.png", sizes: "64x64" },
+			{ src: "/assets/home/home.webp", sizes: "64x64" },
 		// 留空以使用默认 favicon
 		// {
 		//   src: '/favicon/icon.png',    // 图标文件路径
@@ -277,8 +277,8 @@ export const siteConfig: SiteConfig = {
 			// 中日韩字体 - 作为回退字体
 			fontFamily: "思源黑体",
 			fontWeight: "400",
-			localFonts: ["SourceHanSansSC-Regular.otf"],
-			enableCompress: false, // OTF 格式不支持 Fontmin 子集化
+			localFonts: ["SourceHanSansSC-Regular.ttf"],
+			enableCompress: true, // OTF 格式不支持 Fontmin 子集化
 		},
 	},
 	showLastModified: true, // 控制"上次编辑"卡片显示的开关
