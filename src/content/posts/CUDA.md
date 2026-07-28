@@ -16,7 +16,7 @@ draft: false
 这一部分**很重要**，能够帮助理解为什么一些常用的GPU工程技巧要这么设计，这里从**硬件架构**和**内存层次结构**两方面展开，做一次系统性总结
 
 > [!NOTE]
-> 关于 GPU 的一些微架构比如：Cache Hit Rate、L1/L2 Cache、Memory Throughput、Stall LG Throttle、Scoreboard等，会留到后面的一篇关于stall类型层级下的tiling性能对比文章中详细说明。如果只是浅浅应付 CUDA 编程，下面这些GPU基础知识就应该足够了。
+> 关于 GPU 的一些微架构层面的性能分析，比如：Cache Hit Rate、L1/L2 Cache、Memory Throughput、Stall LG Throttle、Scoreboard等，会留到后面的一篇关于stall类型层级下的tiling性能对比文章中详细说明。如果只是浅浅应付 CUDA 编程，不去关心性能分析与优化，下面这些GPU基础知识就应该足够了。
 
 ### GPU 硬件架构
 
