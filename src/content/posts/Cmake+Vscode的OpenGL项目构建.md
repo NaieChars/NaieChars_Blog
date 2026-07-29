@@ -52,6 +52,9 @@ draft: false
     - stb_image.h：放在 stb 文件夹内，负责图片读取，将图片解码为原始像素数组存储在 CPU 中，用于环境贴图和纹理贴图
     - stb_image_write.h：图片输出，将渲染结果保存为静态图片
 
+> [!note]
+> 下面的内容其实可以用CMake `FetchContent` 而不是手动下载SDK，这样可以直接从github拉取源码，不用手动配置环境，这也是现代OpenGL项目常用办法。但是我习惯了手动配置，所以这里便展现的是古法配置（）
+
 #### 2. 拉取 GLAD
 
 - 打开 <https://gen.glad.sh>
