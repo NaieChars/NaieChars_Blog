@@ -8,50 +8,8 @@ category: 技术
 draft: false
 ---
 
-```txt
-Smoothed Particle Hydrodynamics
-|
-├── 1. Introduction
-|      ├── Eulerian vs Lagrangian
-|      ├── Mesh-based vs Meshless
-|      └── SPH Overview
-|
-├── 2. Mathematical Foundation
-|      ├── Continuum Mechanics
-|      ├── Conservation Laws
-|      ├── Navier-Stokes Equation
-|      └── Lagrangian Fluid Description
-|
-├── 3. SPH Approximation Theory
-|      ├── Kernel Approximation
-|      ├── Particle Approximation
-|      ├── Kernel Properties
-|      └── Gradient/Laplacian Approximation
-|
-├── 4. Weakly Compressible SPH
-|      ├── Density Estimation
-|      ├── Equation of State
-|      ├── Pressure Force
-|      ├── Viscosity
-|      └── Time Integration
-|
-├── 5. Incompressible SPH
-|      ├── PCISPH
-|      ├── IISPH
-|      └── DFSPH
-|
-├── 6. Boundary Handling
-|
-├── 7. Neighbor Search
-|
-├── 8. GPU Implementation
-|
-└── 9. Advanced Topics
-       ├── Rigid-Fluid Coupling
-       ├── Multi-phase Flow
-       └── Rendering
-```
-
+> [!note]
+> 各个部分的详细代码实现可以看看我在github上的一个仓库，里面有一个简易版的 sph 流体模拟
 
 # 流体模拟概览
 流体模拟的目标是求解流体运动规律。宏观尺度下，流体运动由：质量守恒、动量守恒、能量守恒来描述。而对于不可压缩液体诸如水、蜂蜜等等，通常只需要关注质量与动量守恒即可。
