@@ -161,29 +161,18 @@ $$
 - $R$：产生式集合，形如 $A \to \alpha$，其中 $A \in V$，$\alpha \in (V \cup \Sigma)^*$
 - $S \in V$：开始符号
 
-从产生式可以定义推导关系 $\Rightarrow$。如果存在产生式 $A \to \gamma$，那么 $\alpha A \beta \Rightarrow \alpha \gamma \beta$。推导的自反传递闭包记为 $\Rightarrow^*$。
-
-文法 $G$ 定义的语言是所有能从 $S$ 推导出的终结符串的集合：
-
-$$
-L(G) = \{ w \in \Sigma^* \mid S \Rightarrow^* w \}
-$$
-
+CFG 的核心动作便是**推导：就是不断用产生式，把非终结符替换掉，直到得到完整的终结符串**，于是精确定义了一套合法字符串的生成规则。  
 推导过程中，如果每一步都替换最左边的非终结符，称为**最左推导**；替换最右边的称为**最右推导**。最右推导又称**规范推导**，其逆过程是自底向上分析的基础。
+
+> [!note]
+> 如果有 $aSb \rightarrow aXYb$，能否替换 $xxaSbyy$？  
+> 不能！因为其前者压根不是产生式，CFG 里面规定产生式只能有一个非终结符
 
 ## 2. 语法树与二义性
 
-语法树是推导的图形表示：根是开始符号，内部节点是非终结符，叶子是终结符。一个推导对应一棵语法树，但不同的推导顺序可能对应同一棵树。例如，最左推导和最右推导通常对应同一棵语法树。
+语法树是推导的图形表示：根是开始符号，内部节点是非终结符，**叶子是终结符**。一个推导对应一棵语法树，但**不同的推导顺序可能对应同一棵树**。例如，最左推导和最右推导通常对应同一棵语法树。
 
-如果一个文法存在某个句子对应两棵或更多不同的语法树，则称该文法是**二义文法**。经典的例子是悬空 else 问题：
-
-```
-stmt -> if expr then stmt
-      | if expr then stmt else stmt
-      | other
-```
-
-对于句子 `if E1 then if E2 then S1 else S2`，else 可以与内层 if 或外层 if 匹配，产生两棵语法树。
+如果一个文法存在某个句子对应两棵或更多不同的语法树，则称该文法是**二义文法**。经典的例子是悬空 else 问题
 
 消除二义性的方法：
 
@@ -194,24 +183,26 @@ stmt -> if expr then stmt
 
 ## 3. 自顶向下分析
 
-自顶向下分析从开始符号出发，尝试构造一个最左推导，使得叶子序列与输入 token 流匹配。最直观的实现是递归下降，但回溯代价高。预测分析通过提前查看输入符号来消除回溯，典型代表是 LL(1) 文法。
+自顶向下分析从开始符号出发，尝试构造一个最左推导，使得叶子序列与输入 token 流匹配。最直观的实现是递归下降，但回溯代价高。**预测分析**通过提前查看输入符号来消除回溯，典型代表是 **LL(1) 文法**。
+
+> 这里记住一个点，**左递归对自顶向下分析很危险，因为展开后又得到自己，容易无限递归**
 
 ### 3.1 FIRST 和 FOLLOW 集合
 
 预测分析需要两个集合：
 
-- $\text{FIRST}(\alpha)$：可以从 $\alpha$ 推导出的所有串的首终结符集合。如果 $\alpha \Rightarrow^* \varepsilon$，则 $\varepsilon \in \text{FIRST}(\alpha)$。
-- $\text{FOLLOW}(A)$：可能在某些句型中紧跟在非终结符 $A$ 之后的终结符集合。
+- $\text{FIRST}(\alpha)$：可以从 $\alpha$ 推导出的所有串的**首终结**符集合。例如 $E \rightarrow +numE|\varepsilon$。那么 $\text{FIRST}(E)=\{+, \varepsilon \}$
+- $\text{FOLLOW}(A)$：可能在某些句型中**紧跟**在非终结符 $A$ 之后的**终结符集合**。如果 $A$ 后面跟着非终结符 $B(B \rightarrow b)$，那么 $\text{FOLLOW}(A) = \text{FIRST}(B) = \{b\}$
 
-计算 FIRST 的规则：
+**计算 FIRST 的规则**：
 
 1. 若 $X$ 是终结符，则 $\text{FIRST}(X) = \{X\}$。
 2. 若 $X \to \varepsilon$ 是产生式，则 $\varepsilon \in \text{FIRST}(X)$。
 3. 若 $X \to Y_1 Y_2 \cdots Y_k$，则将 $\text{FIRST}(Y_1)$ 中除 $\varepsilon$ 外的元素加入 $\text{FIRST}(X)$；若 $Y_1$ 能推出 $\varepsilon$，则继续加入 $\text{FIRST}(Y_2)$，依此类推；若所有 $Y_i$ 都能推出 $\varepsilon$，则 $\varepsilon \in \text{FIRST}(X)$。
 
-计算 FOLLOW 的规则：
+**计算 FOLLOW 的规则**
 
-1. 将 $\$$（输入结束标记）放入 $\text{FOLLOW}(S)$。
+1. 将 **$\$$（输入结束标记）** 放入 $\text{FOLLOW}(S)$。
 2. 若存在产生式 $A \to \alpha B \beta$，则 $\text{FIRST}(\beta)$ 中除 $\varepsilon$ 外的元素加入 $\text{FOLLOW}(B)$。
 3. 若存在产生式 $A \to \alpha B$，或 $A \to \alpha B \beta$ 且 $\beta \Rightarrow^* \varepsilon$，则 $\text{FOLLOW}(A)$ 加入 $\text{FOLLOW}(B)$。
 
@@ -274,14 +265,5 @@ LR 分析器由两个表驱动：ACTION 和 GOTO。
 
 分析过程反复查表，直到接受或报错。LR 分析器的构造算法虽然复杂，但可以完全自动化，这正是工具生成器的价值所在。
 
-## 6. 复习要点
 
-- 语法分析的理论基础是上下文无关文法，但实际编译器只使用确定性的子类：LL 和 LR。
-- 推导与语法树：最左推导对应自顶向下，最右推导的逆过程对应自底向上。
-- 二义性是文法的属性，需要消除或通过规则消解。
-- 自顶向下分析需要 FIRST/FOLLOW 集合和预测分析表；LL(1) 文法是无二义、无左递归、无公共前缀的。
-- 自底向上分析基于移进-归约，LR 分析器通过项目集构造 DFA，SLR/LR(1)/LALR 是不同强度的变体。
-- LL 与 LR 的关键区别：LL 在推导时决定使用哪个产生式；LR 在归约时决定使用哪个产生式。LR 能处理更多文法，但状态构造更复杂。
-- 实际工具：ANTLR 使用 LL(*)，Yacc/Bison 使用 LALR(1)。
-
-> 如果只让我记住一句话：语法分析就是把线性的 token 流重新组装成树，LL 从根往下长，LR 从叶往上拼。前者靠预测，后者靠归约。
+未完待续……
