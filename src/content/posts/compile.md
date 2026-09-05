@@ -241,14 +241,16 @@ CFG 的核心动作便是**推导（规约是推导的逆过程）：就是不�
 
 语法树是推导的图形表示：**根是开始符号，内部节点是非终结符，叶子是终结符**。一个推导对应一棵语法树，但**不同的推导顺序可能对应同一棵树**。例如，最左推导和最右推导通常对应同一棵语法树。
 
-如果一个文法存在某个句子对应两棵或更多不同的语法树，则称该文法是**二义文法**。经典的例子是悬空 else 问题
+如果一个文法存在某个句子对应两棵或更多**不同的语法树（二义性看树，不看推导过程）**，则称该文法是**二义文法**。经典的例子是悬空 else 问题
+
+> [!note]
+> **悬空 else 问题**:  
+> 为了解决 `else` 与 `if` 的匹配问题，实际问题通常规定 `else` 与最近的还没有匹配 `else` 的 `if` 匹配队  
+> 
 
 消除二义性的方法：
 
-- 引入优先级和结合性规则，如规定 else 与最近的未匹配 then 匹配。
-- 改写文法，引入新的非终结符来强制分层，例如区分 matched_stmt 和 unmatched_stmt。
-
-二义性本身不是错误，很多文法天然二义，但可以通过附加规则消解。然而，对于 LL 和 LR 分析，二义文法通常无法直接使用，需要消除或借助规则。
+- 引入**优先级**（即引入新的非终结符来强制分层），表达式 -> 加减层 -> 乘除层 -> 基本元素（优先级越高，放在越下面）
 
 ## 3. 自顶向下分析
 
@@ -260,7 +262,7 @@ CFG 的核心动作便是**推导（规约是推导的逆过程）：就是不�
 
 预测分析需要两个集合：
 
-- $\text{FIRST}(\alpha)$：可以从 $\alpha$ 推导出的所有串的**首终结**符集合。例如 $E \rightarrow +numE|\varepsilon$。那么 $\text{FIRST}(E)=\{+, \varepsilon \}$
+- $\text{FIRST}(\alpha)$：可以从 $\alpha$ 推导出的所有串的**首终结符集合**。例如 $E \rightarrow +numE|\varepsilon$。那么 $\text{FIRST}(E)=\{+, \varepsilon \}$
 - $\text{FOLLOW}(A)$：可能在某些句型中**紧跟**在非终结符 $A$ 之后的**终结符集合**。如果 $A$ 后面跟着非终结符 $B(B \rightarrow b)$，那么 $\text{FOLLOW}(A) = \text{FIRST}(B) = \{b\}$
 
 **计算 FIRST 的规则**：
@@ -269,22 +271,87 @@ CFG 的核心动作便是**推导（规约是推导的逆过程）：就是不�
 2. 若 $X \to \varepsilon$ 是产生式，则 $\varepsilon \in \text{FIRST}(X)$。
 3. 若 $X \to Y_1 Y_2 \cdots Y_k$，则将 $\text{FIRST}(Y_1)$ 中除 $\varepsilon$ 外的元素加入 $\text{FIRST}(X)$；若 $Y_1$ 能推出 $\varepsilon$，则继续加入 $\text{FIRST}(Y_2)$，依此类推；若所有 $Y_i$ 都能推出 $\varepsilon$，则 $\varepsilon \in \text{FIRST}(X)$。
 
+> 总结下来：FIRST从底层开始求，比较好求
+
 **计算 FOLLOW 的规则**
 
-1. 将 **$\$$（输入结束标记）** 放入 $\text{FOLLOW}(S)$。
+1. 将 $（输入结束标记）放入 FOLLOW(S)
 2. 若存在产生式 $A \to \alpha B \beta$，则 $\text{FIRST}(\beta)$ 中除 $\varepsilon$ 外的元素加入 $\text{FOLLOW}(B)$。
 3. 若存在产生式 $A \to \alpha B$，或 $A \to \alpha B \beta$ 且 $\beta \Rightarrow^* \varepsilon$，则 $\text{FOLLOW}(A)$ 加入 $\text{FOLLOW}(B)$。
 
+> FOLLOW总结下来就是：  
+> FOLLOW 不包含ε  
+> 看某个非终结符B时，只看它在产生式右边出现的位置  
+> 如果B后面有东西，把后面的东西的 FIRST 除 ε 外加入 FOLLOW(B)  
+> 如果B后面没有东西，或者后面的东西可以推导出ε，把左边非终结符的 FOLLOW 加入 FOLLOW(B)
+> 开始符号的 FOLLOW 放 $
+
+**经典表达式文法**：  
+
+```text
+E -> T E'
+E' -> + T E' | ε
+T -> F T'
+T' -> * F T' | ε
+F -> ( E ) | id
+```
+
+计算得：
+
+```text
+FIRST(F) = {(, id}
+FIRST(T') = {*, ε}
+FIRST(T) = {(, id}
+FIRST(E') = {+, ε}
+FIRST(E) = {(, id}
+
+FOLLOW(E)  = {$, )}
+FOLLOW(E') = {$, )}
+FOLLOW(T)  = {+, $, )}
+FOLLOW(T') = {+, $, )}
+FOLLOW(F)  = {*, +, $, )}
+```
+
 ### 3.2 预测分析表与 LL(1) 文法
+LL(1) 说的是：从左往右读，使用最左推导，只向前看一个token。于是看到当前token就可以确定用哪一条生产式。
 
-预测分析表 $M$ 是一个二维表，行是非终结符，列是终结符（含 $\$$）。对于每个产生式 $A \to \alpha$：
+**预测分析表 $M$** 是一个二维表，行是非终结符，列是终结符。
 
-- 对 $\text{FIRST}(\alpha)$ 中的每个终结符 $a$，将 $A \to \alpha$ 填入 $M[A, a]$。
-- 若 $\varepsilon \in \text{FIRST}(\alpha)$，则对 $\text{FOLLOW}(A)$ 中的每个终结符 $b$，将 $A \to \alpha$ 填入 $M[A, b]$。
+这里给一个小例子说明如何构建预测分析表：
 
-如果表中每个格子至多一个产生式，则该文法是 LL(1) 文法。LL(1) 的含义是：从左到右扫描输入，使用最左推导，只需向前看一个符号。
+$$
+S \to aA
+A \to bA \quad | \quad \epsilon
+$$
 
-LL(1) 文法是无二义的，且没有左递归和公共前缀。消除左递归和提取左因子是将文法改造成 LL(1) 的常用技术。
+对应的 FIRST 和 FOLLOW：
+
+```
+FIRST(S) = {a}
+FIRST(A) = {b, ε}
+FOLLOW(S) = {$}
+FOLLOW(A) = {$}
+```
+
+- 处理 $S \to aA$：看 FIRST(aA) = {a}
+- 处理 $A \to bA$：看 FIRST(bA) = {b}
+- **处理 $A \to \epsilon$：看 FOLLOW(A) = {$}**
+
+所以 M 可以构造为：
+
+|   | a         | b         | $                 |
+| - | --------- | --------- | ----------------- |
+| S | $S\to aA$ | ×         | ×                 |
+| A | ×         | $A\to bA$ | $A\to\varepsilon$ |
+
+接下来真正模拟编译器  
+例如输入token流为：`ab$`
+
+- 当前：S，输入：a，查 M[S, a]，得到唯一生产式 $S \to aA$
+- 当前：A，输入：b，查 M[A, b]，得到唯一生产式 $A \to bA$
+- 当前：A，输入：`$`，查 M[A, `$`]，得到生产式 $A \to \epsilon$
+
+如果表中每个格子**至多一个产生式**，则该文法是 LL(1) 文法。**LL(1) 文法是无二义的**，且没有左递归和公共前缀。消除左递归和提取左因子是将文法改造成 LL(1) 的常用技术。
 
 ## 4. 自底向上分析
 
