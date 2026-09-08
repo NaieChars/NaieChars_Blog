@@ -1,5 +1,5 @@
 ---
-title: GPU 基本架构与 CUDA 编程
+title: GPU 基本架构、CUDA 编程与 CUDA + Cmake 项目的工程经验
 published: 2026-07-27
 pinned: true
 description: 从 GPU 架构开始，依次记录了一些 CUDA 常见语法与一些常用工程技巧，属于一份偏个人向的笔记
@@ -177,3 +177,58 @@ if (idx >= n) return;
 如果一个Kernel的**计算基于旧状态**，就不能边读边写同一个数据区域，应该分成两个kernel来完成。  
 我们可以举一个引力模拟的例子：  
 每个粒子的加速度，取决于其他所有粒子当前的位置。如果在同一个 kernel 里，一边让线程 A 更新粒子 0 的位置，一边让线程 B 计算粒子 1 的受力（需要读取粒子 0 的位置），那么根据线程调度顺序不同，线程 B 可能读到的是线程 A 已经写入的新位置，这便是**竞态问题**，解决办法：把计算和更新拆成两个kernel
+
+
+# CUDA + Cmake (+ OpenCV) 项目的工程经验
+
+> [!note]
+> 以下内容来源笔者实际踩坑，调BUG调得之销魂，这里简单记录一些有价值的踩坑实录，希望能帮到一部分也在这条路上的人
+>
+
+## `__device__ 函数名` 跨 `.cu` 文件无法解析
+
+比如下面一个结构：
+
+```
+util.cu
+    └── __device__ solveAX0()
+
+TriangulationCUDA.cu
+    └── triangulateKernel()
+            └── solveAX0()
+```
+
+> 我在 `Triangulation.cu` 里有 `#inlcude "util.cuh"`，但编译器告诉我仍找不到 `solveAX0` 的函数实现
+>
+
+编译器抛出**异常**如下：
+
+```
+ptxas fatal
+Unresolved extern function
+```
+
+本质原因是：**`#include .cuh` 只会让当前文件知道函数声明，不会复制函数实现**。`__device__` 属于GPU代码，跨 `.cu` 使用时，还需要 CUDA 的 **devie linking**，**解决方法**如下：
+
+```cmake
+set_target_properties(cuda_sfm PROPERTIES
+    CUDA_SEPARABLE_COMPILATION ON
+)
+```
+
+## `LNK2019`：Host 函数找不到
+
+这个错误的具体原因是：**不同目录的同名 `.cu` 文件**生成的中间文件冲突，导致链接失败。
+
+拿这个例子主要是说明在**遇到链接错误时**该如何解决问题，常见的做法是在 `build/Debug`（这里具体看`.obj` 文件在哪里）里面找**有没有相关源文件的 `.obj` 文件**。更进一步，可以用:
+
+```PowerShell
+dumpbin /symbols FeatureMatch.obj
+```
+
+查找中间文件里的具体内容，看有没有具体的函数。
+
+这里得出的经验：
+> CUDA / CMake 项目里，不要让同一个 target 下不同目录存在同名源文件。
+
+这种结构虽然源码层面合法，但是 MSBuild 的中间文件命名容易踩坑
