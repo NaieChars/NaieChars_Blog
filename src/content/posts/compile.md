@@ -371,7 +371,7 @@ $$
 
 **回溯问题**：当一个非终结符用某一个候选匹配成功时，这种匹配可能是暂时的，出错时，不得不**回溯**
 
-### 3.1 消除直接左递归与间接左递归*
+### 3.1 消除直接左递归与间接左递归（重要）
 **直接左递归**：原生产式：$E \to E\alpha|\beta$
 
 左递归变右递归：  
@@ -401,26 +401,76 @@ A ->  ca A' | d A'
 A' -> Aba A' | ε
 ```
 
-### 公共左因子
-公共左因子指的是同一个非终结符的多个产生式右部，**具有相同的非空前缀符号串**
+例题：消除文法 $G(S)$ 的左递归
+
+$$
+S \to Qc | c \\
+Q \to Rb | b \\
+R \to Sa | a
+$$
+
+将 S 展开：
+
+$$
+S \to Sabc\quad | \quad abc \quad | \quad bc \quad| \quad c \\
+
+\text{然后按照直接左递归操作：} \\
+
+S \to abcS' \quad | \quad bcS' \quad|\quad cS' \\
+S' \to abcS' \quad | \quad \varepsilon
+$$
 
 
-### 3.1 FIRST 和 FOLLOW 集合
+### 3.2 FIRST 和 FOLLOW 集合（重要）
 
 预测分析需要两个集合：
 
 - $\text{FIRST}(\alpha)$：可以从 $\alpha$ 推导出的所有串的**首终结符集合**。例如 $E \rightarrow +numE|\varepsilon$。那么 $\text{FIRST}(E)=\{+, \varepsilon \}$
-- $\text{FOLLOW}(A)$：可能在某些句型中**紧跟**在非终结符 $A$ 之后的**终结符集合**。如果 $A$ 后面跟着非终结符 $B(B \rightarrow b)$，那么 $\text{FOLLOW}(A) = \text{FIRST}(B) = \{b\}$
+- $\text{FOLLOW}(A)$：可能在某些句型中**紧跟**在非终结符 $A$ 之后的**终结符集合**。如果 $A$ 后面跟着非终结符 $B(\text{同时}，B \rightarrow b)$，那么 $\text{FOLLOW}(A) = \text{FIRST}(B) = \{b\}$
 
-**计算 FIRST 的规则**：
+#### 计算 FIRST 的规则
 
 1. 若 $X$ 是终结符，则 $\text{FIRST}(X) = \{X\}$。
 2. 若 $X \to \varepsilon$ 是产生式，则 $\varepsilon \in \text{FIRST}(X)$。
-3. 若 $X \to Y_1 Y_2 \cdots Y_k$，则将 $\text{FIRST}(Y_1)$ 中除 $\varepsilon$ 外的元素加入 $\text{FIRST}(X)$；若 $Y_1$ 能推出 $\varepsilon$，则继续加入 $\text{FIRST}(Y_2)$，依此类推；若所有 $Y_i$ 都能推出 $\varepsilon$，则 $\varepsilon \in \text{FIRST}(X)$。
+3. 若 $X \to Y_1 Y_2 \cdots Y_k$，则将 **$\text{FIRST}(Y_1)$** 中除 $\varepsilon$ 外的元素加入 $\text{FIRST}(X)$；若 $Y_1$ 能推出 $\varepsilon$，则继续加入 $\text{FIRST}(Y_2)$，依此类推；若所有 $Y_i$ 都能推出 $\varepsilon$，则 $\varepsilon \in \text{FIRST}(X)$。
 
-> 总结下来：FIRST从底层开始求，比较好求
+这里给一个简单**例子**：
 
-**计算 FOLLOW 的规则**
+给定文法：
+
+$$
+S \to AB \\
+A \to aA | \varepsilon \\
+B \to bB | C  \\
+C \to c | \varepsilon
+$$
+
+则：
+
+$$
+\text{FIRST}(A) = \{a, \varepsilon\}\\
+\text{FIRST}(B) = \{b, c, \varepsilon\} \\
+\text{FIRST}(S) = \{a, b, c, \varepsilon\} \\
+$$
+
+> 总结下来：FIRST从底层开始求，比如在上面的例子里，我们先求A 和 B 的 FIRST，之后求 S 比较好求，只用代入 FIRST(B) 即可。
+
+#### 公共左因子
+公共左因子指的是同一个非终结符的多个产生式右部，**具有相同的非空前缀符号串**
+
+很简单，例如：$A \to ab | ac | \gamma_1|\gamma_2$，$a$ 便是公共左因子
+
+我们可以**提取**上式的**公共左因子**，于是得到
+
+$$
+A \to aA'| \gamma_1 | \gamma_2 \\
+A' \to b | c
+$$
+
+这样做的**目的**是：经过反复提取左因子，就能够把每个非终结符(包括新引进者)的所有候选首符集变成为两两不相交
+
+
+#### 计算 FOLLOW 的规则
 
 1. 将 $（输入结束标记）放入 FOLLOW(S)
 2. 若存在产生式 $A \to \alpha B \beta$，则 $\text{FIRST}(\beta)$ 中除 $\varepsilon$ 外的元素加入 $\text{FOLLOW}(B)$。
