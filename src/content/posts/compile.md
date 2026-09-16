@@ -108,7 +108,7 @@ $$
 - r*：r 重复 0 次或多次
 
 > [!note]
-> 这里先提一下 $\epsilon$，**$\epsilon$ 表示空串**，里面什么字符都没有（长度为0），但是是一个合法字符串，这里和空集 ∅ 是两回事（∅ 一个字符串都没有）
+> 这里先提一下 $\varepsilon$，**$\varepsilon$ 表示空串**，里面什么字符都没有（长度为0），但是是一个合法字符串，这里和空集 ∅ 是两回事（∅ 一个字符串都没有）
 
 **优先级**为：`*` > `连接` > `|`，括号可以改变优先级。常用扩展如 `+`、`?`、字符类 `[a-z]` 都可以归约到上述基本运算。
 
@@ -278,7 +278,7 @@ $$
 ### 1.1 标准CFG
 
 $$
-program \rightarrow stmt_list \quad| \quad \epsilon
+program \rightarrow stmt_list |  \varepsilon
 $$
 
 对于上式，也可以写成：$program \rightarrow \{stmt\}$，**大括号**里的部分表示**重复0次或无数次**
@@ -321,26 +321,26 @@ CFG 的核心动作便是**推导**（其逆过程称为**规约**）：就是�
 
 $$
 S \to AB \\
-A \to aA \quad| \quad a \\
-B \to bB \quad | \quad b
+A \to aA |  a \\
+B \to bB  |  b
 $$
 
 则其产生的语言是：
 
 $$
-L(G_1) = \{a^mb^n\quad | m, n > 0 \}
+L(G_1) = \{a^mb^n | m, n > 0 \}
 $$
 
 2. 设文法 $G_2(S)$:
 
 $$
-S \to aSb \quad | \quad ab
+S \to aSb  |  ab
 $$
 
 则其产生的语言是：
 
 $$
-L(G_2) = \{a^nb^n \quad | n \ge 1\}
+L(G_2) = \{a^nb^n  | n \ge 1\}
 $$
 
 
@@ -412,12 +412,12 @@ $$
 将 S 展开：
 
 $$
-S \to Sabc\quad | \quad abc \quad | \quad bc \quad| \quad c \\
+S \to Sabc|  abc  |  bc |  c \\
 
 \text{然后按照直接左递归操作：} \\
 
-S \to abcS' \quad | \quad bcS' \quad|\quad cS' \\
-S' \to abcS' \quad | \quad \varepsilon
+S \to abcS'  |  bcS' | cS' \\
+S' \to abcS'  |  \varepsilon
 $$
 
 
