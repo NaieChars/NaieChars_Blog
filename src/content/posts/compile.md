@@ -472,42 +472,51 @@ $$
 
 #### 计算 FOLLOW 的规则
 
-1. 将 $（输入结束标记）放入 FOLLOW(S)
+1. 将 **$**（**输入结束标记**）放入 FOLLOW(S)
 2. 若存在产生式 $A \to \alpha B \beta$，则 $\text{FIRST}(\beta)$ 中除 $\varepsilon$ 外的元素加入 $\text{FOLLOW}(B)$。
 3. 若存在产生式 $A \to \alpha B$，或 $A \to \alpha B \beta$ 且 $\beta \Rightarrow^* \varepsilon$，则 $\text{FOLLOW}(A)$ 加入 $\text{FOLLOW}(B)$。
 
-> FOLLOW总结下来就是：  
-> FOLLOW 不包含ε  
+> FOLLOW **总结**下来就是：  
+> **FOLLOW 不包含ε**  
 > 看某个非终结符B时，只看它在产生式右边出现的位置  
 > 如果B后面有东西，把后面的东西的 FIRST 除 ε 外加入 FOLLOW(B)  
 > 如果B后面没有东西，或者后面的东西可以推导出ε，把左边非终结符的 FOLLOW 加入 FOLLOW(B)
-> 开始符号的 FOLLOW 放 $
+> **开始符号的 FOLLOW 放 $**
 
-**经典表达式文法**：  
+**典例**：    
+有如下产生式，计算 FOLLOW 和 FIRST 集合
 
-```text
-E -> T E'
-E' -> + T E' | ε
-T -> F T'
-T' -> * F T' | ε
-F -> ( E ) | id
-```
+$$
+\begin{aligned}
+E &\rightarrow T E' \\
+E' &\rightarrow +TE' \mid \varepsilon \\
+T &\rightarrow FT' \\
+T' &\rightarrow *FT' \mid \varepsilon \\
+F &\rightarrow (E) \mid id
+\end{aligned}
+$$
 
 计算得：
 
-```text
-FIRST(F) = {(, id}
-FIRST(T') = {*, ε}
-FIRST(T) = {(, id}
-FIRST(E') = {+, ε}
-FIRST(E) = {(, id}
+$$
+\begin{aligned}
+\mathrm{FIRST}(F) &= \{(,\,id\} \\
+\mathrm{FIRST}(T') &= \{*,\,\varepsilon\} \\
+\mathrm{FIRST}(T) &= \{(,\,id\} \\
+\mathrm{FIRST}(E') &= \{+,\,\varepsilon\} \\
+\mathrm{FIRST}(E) &= \{(,\,id\}
+\end{aligned}
+$$
 
-FOLLOW(E)  = {$, )}
-FOLLOW(E') = {$, )}
-FOLLOW(T)  = {+, $, )}
-FOLLOW(T') = {+, $, )}
-FOLLOW(F)  = {*, +, $, )}
-```
+$$
+\begin{aligned}
+\mathrm{FOLLOW}(E) &= \{\$,\,)\} \\
+\mathrm{FOLLOW}(E') &= \{\$,\,)\} \\
+\mathrm{FOLLOW}(T) &= \{+,\,\$,\,)\} \\
+\mathrm{FOLLOW}(T') &= \{+,\,\$,\,)\} \\
+\mathrm{FOLLOW}(F) &= \{*,\,+,\,\$,\,)\}
+\end{aligned}
+$$
 
 ### 3.2 预测分析表与 LL(1) 文法
 LL(1) 说的是：从左往右读，使用最左推导，只向前看一个token。于是看到当前token就可以确定用哪一条生产式。
