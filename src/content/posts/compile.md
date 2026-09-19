@@ -907,34 +907,14 @@ LR(0) 要解决的是当前我处于哪个项目集状态？现在看到哪个�
 
 
 #### 如何从项目集得到表
-- 举个例子，如果有一个项目 $A \to \alpha \cdot a\beta$，当前状态是 i，那么请记住：
-> 点后面是**终结符**，填 $ACTION [i, a] = shift \quad j$ 。(**ACTION , shift**)
 
-- 如果项目 $A \to \alpha \cdot B \beta$，那么：
-> 点后面是**非终结符**，填 $GOTO[i, B] = j$ 。（**GOTO**）
+1. 如果项目 $A \to \alpha \cdot a B$，点后面是**终结符**，并且 $GOTO(I_i, a) = I_j$，填 $ACTION [i, a] = s_j$
 
-- 如果项目 $A \to \alpha \cdot$，这种表示全部识别完，可以进行**归约**
-> $reduce A \to a$
+2. 如果项目 $A \to \alpha \cdot B \beta$，点后面是**非终结符**，并且 $GOTO(I_i, B) = I_j$，填 $GOTO[i, B] = j$ 
+3. 如果状态 $I_i$ 中有 $A \to \alpha \cdot$，那么填 $ACTION[I, a] = r_k$，k 是产生式编号
+4. 如果 $S' \to S \cdot$，那么 $ACTION[i, \#] = acc$
 
-- 如果项目 $S' \to S \cdot$，说明整个开始符号 `S` 已经识别完成，所以：
-> $ACTION[i, \text{美元号}] = accept $
 
-让我们看到之前给出的例子，从初始状态开始，其对应的 LR(0) 分析表（部分）：
-
-```text
-I0:
-
-S' → . S
-S  → . A
-A  → . a A
-A  → . b
-```
-
-| 状态 | ACTION |  |     | GOTO|      |
-| --- | ----| --- | --- |--- | ---- |
-|  | a | b | $ | A | B |
-| 0 |shift 1 | shift 2 | | 3 | 4 |
-| 1 | 
 
 > [!note]
 > LR(0) 项目本身没有向前看符号。导致只要状态里出现了 `A -> b .` 这样的项目，就可能在所有终结符上归约，这很容易与 Shift 冲突，于是有了后面的 SLR
