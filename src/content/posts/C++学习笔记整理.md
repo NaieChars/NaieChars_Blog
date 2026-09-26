@@ -74,22 +74,31 @@ std::string Shader = "...";
 但是很多函数（比如 OpenGL、GLFW、Assimp 等 C 风格接口时）需要的是 `const char*`，这就需要通过 `shader.c_str()`与C字符串互换，返回值就是 `const char*`。
 
 ### inline
-内联一般用在数学库里面，许多函数比如 `dot()`、`cross()`、`normalize()` 等，建议编译器将函数直接展开，减少函数调用开销。
+内联一般用在数学库里面，许多函数比如 `dot()`、`cross()`、`normalize()` 等，**建议**编译器将函数直接展开，减少函数调用开销。
 
 > [!IMPORTANT]
->- 类里面定义的成员函数，默认都是 inline
->- inline 允许函数定义到头文件，当有多个`.cpp`都包含该头文件时，不会发生函数重复定义
+>- 类里面定义的成员函数，**默认都是 inline**
+>- inline 允许函数定义到头文件，当有多个`.cpp`都包含该头文件时，不会发生函数重复定义，即避免 ODR 问题
 >
 
 ### 函数重载与默认参数
-默认参数写在参数列表末尾，可以替换简单的函数重载，让图形学 API更加简洁。在 CG 中加载纹理 `LoadTexture(path)` 内部可能就是 `LoadTexture(path, true)`，这里的 `true`表示默认翻转图片。
+默认参数写在参数列表末尾，**可以替换简单的函数重载**，让图形学 API更加简洁。在 CG 中加载纹理 `LoadTexture(path)` 内部可能就是 `LoadTexture(path, true)`，这里的 `true`表示默认翻转图片。
 
 ### nullptr
 为什么不用 `NULL`：  
-因为很多编译器就是 `#define NULL 0`，本质上 `NULL` 是0，可能会导致函数重载有问题。
+因为很多编译器就是 `#define NULL 0`，本质上 `NULL` 是0，可能会导致函数重载有问题。而 `nullptr` 是类型 `std::nullptr_t`，可以隐式转成任意指针类型和成员指针类型，也可以转成 `bool`，值为 `false`，但是不会转成整数
+
+```cpp
+void f(int);
+void f(char*);
+
+f(NULL);    // 两者都满足
+f(nullptr); // 只能选择 f(char*)
+```
 
 ### enum class
-`enum class` 是现代 C++ 推荐的枚举类型，必须通过 `类型名::成员名` 访问，**不会污染命名空间**。 
+`enum class` 是现代 C++ 推荐的枚举类型，必须通过 `类型名::成员名` 访问，这样做**不会污染命名空间**。    
+
 例如纹理过滤
 ```cpp
 enum class FilterMode   // 纹理过滤方式
@@ -97,8 +106,15 @@ enum class FilterMode   // 纹理过滤方式
     Nearest,
     Linear
 };
+
 // 调用
 texture.SetFilter(FilterMode::Linear);
+```
+
+`enum class` 默认底层类型是 `int`，值默认从0开始递增，但是从类型系统来讲，`enum class FilterMode` 本身是一个独立的类型，不是 `int`，且不会隐式转换成 `int`，所以在福祉时要显示转换：
+
+```cpp
+int mode = static_cast<int>(FilterMode:Linear);
 ```
 
 ---
@@ -106,13 +122,14 @@ texture.SetFilter(FilterMode::Linear);
 ## 面向对象
 
 ### struct 与 class
-C++ 的 `struct` 可以包有成员函数、构造函数、析构函数、继承……几乎和 `class` 一样。两者的区别在于默认权限不同。  
+C++ 的 `struct` 可以包含成员函数、构造函数、析构函数、继承……几乎和 `class` 一样。两者的区别在于默认权限不同。**`class` 默认 private，`struct` 默认 public**
 
 > [!IMPORTANT]
-> 现代 C++ 有个约定：`struct` 表示纯数据，`class` 表示有行为的对象。
+> 现代 C++ 有个**约定**：`struct` 表示纯数据，`class` 表示有行为的对象。
+
 
 ### this 指针与 const 成员函数
-根据 `this` 指针可以返回自己的特性，可以设计链式调用（Method Chaining）。
+`this` 指针返回的是当前对象自己，可以设计链式调用（Method Chaining）。
 - C++ 风格
 
 ```cpp
@@ -122,31 +139,34 @@ public:
     Camera& Move(/*参数*/)
     {
         position += ...;
-        return *this;   // 函数返回 camera自己的引用（Camera&）
+        return *this;   // 解引用，函数返回类型为 Camera&，返回的是一个引用
     }
 };
+
 // 调用
-camera.Move(1.0f, 0.0f, 0.0f).Rotate(0.1f, 0.0f);
+camera.Move(1.0f, 0.0f, 0.0f).Rotate(0.1f, 0.0f); // 函数返回 camera 自己的引用（类型是 Camera&）
 ```
 
 - C 风格相似写法
 
 ```c
-Camera* Move(Camera* self); // 类似 C 风格的“面向对象”
+Camera* Move(Camera* self); // C 风格类似的“面向对象”
 ```
 
 <details>
 <summary>const 成员函数背后真正的实现原理 [点击展开]</summary>
 
 **每一个非静态成员函数，都隐藏着一个 `this` 指针。** 所以成员函数内部之所以能直接访问 `position`，其实都是通过 `this->position` 做到的。  
-如果是 const 成员函数，下面举个例子：
+**对于 const 成员函数，内部不能对成员的值进行修改**，下面举个例子：
 
 ```cpp
-class Camera {
+class Camera 
+{
 public:
     int position;
     
-    void Print() const {
+    void Print() const 
+    {
         // 这句其实等价于 this->position = 10;
         position = 10;          // 编译错误！
         // 错误原因：this 的类型是 const Camera*，
@@ -216,7 +236,7 @@ glCompileShader(shader);
 
 ### 对象组合
 现代 CG 和游戏引擎更偏向组合而不是复杂的继承，记住下面几点即可  
-**成员对象选构造，再构造外层对象，析构相反。**  
+**成员对象先构造，再构造外层对象，析构相反，先析构成员，再析构基类。**  
 成员对象几乎都通过初始化列表完成初始化。
 
 ### explicit
@@ -224,21 +244,25 @@ glCompileShader(shader);
 
 <details>
 <summary>深入了解隐式转换 [点击展开]</summary>
+
 假如我有一个 `Point` 类，可以用两个坐标构造
 
 ```cpp
-class Point {
+class Point 
+{
 public:
-    Point(float x, float y) {}
+    explicit Point(float x, float y) {}
 };
 ```
-下面这种写法在不加 `explicit` 是合法的
+下面第一行这种写法在不加 `explicit` 是合法的，但如果加了，就不合法。因为禁止了将 `{1.0f, 2.0f}` 隐式转换成 `Point`
 
 ```cpp
 Point p = {1.0f, 2.0f};
 Point p = Point(1.0f, 2.0f); 
-// 编译器偷偷把代码变成了这样，实际上创建了一个临时对象，再用这个对象初始化 p。
+// 编译器偷偷把第一行代码变成了第二行，实际上创建了一个临时对象，再用这个对象初始化 p
 // 不过，实际上编译器几乎一定会把这个过程优化掉，并不会真的生成了一个临时对象，这个优化叫做复制消除 
+
+Point p(1.0f, 2.0f); // 一般情况建议都这样初始化对象
 ```
 </details>
 
@@ -250,10 +274,14 @@ ClassName(const ClassName& other);  // 拷贝构造
 // 调用时
 Camera c1;
 Camera c2 = c1; // 这里是初始化不是赋值！
-Camera c2(c1);  // 上式等于这个
+Camera c2(c1);  // 上式等于这个，这里调用拷贝构造函数
 ```
+
+拷贝构造函数默认形式为 `A(const A&);` 
+
 <details>
 <summary>浅拷贝和深拷贝 [点击展开]</summary>
+
 先来看一个危险的浅拷贝
 
 ```cpp
@@ -274,13 +302,13 @@ public:
 Camera c1(90.0f);
 Camera c2 = c1;  // 调用编译器自动生成的拷贝构造函数
 ```
-**编译器自动生成的拷贝构造函数做的是“浅拷贝”**，只会机械复制所有成员变量，这就导致 `c1.config` 和 `c2.config` 现在指向堆里的同一块内存，当函数结束时，`c1` 和 `c2` 都会被销毁，于是同一块内存被释放了两次。  
+**编译器自动生成的拷贝构造函数做的是“浅拷贝”**，只会机械复制所有成员变量，这就导致 `c1.config` 和 `c2.config` 现在指向堆里的同一块内存，当函数结束时，`c1` 和 `c2` 都会被销毁，**于是同一块内存被释放了两次**。  
 
-于是有了深拷贝 
+看深拷贝 
 
 ```cpp
 // 在类里自己写拷贝构造函数
-    // 深拷贝的拷贝构造函数
+    // 深拷贝的拷贝构造函数为：
     Camera(const Camera& other) : fov(other.fov) 
     {
         config = new float[100];   // 1. 先给自己分配一块全新的内存
@@ -291,7 +319,7 @@ Camera c2 = c1;  // 调用编译器自动生成的拷贝构造函数
     }
 ```
 
-在现代 C++ 中，只要不用裸指针（`float*`），改用智能指针或直接存容器（如 `std::vector<float>`），标准库的默认拷贝构造函数就是深拷贝，不用写 `new/delete`，也不用写拷贝构造函数，这就是零原则。
+在现代 C++ 中，只要不用裸指针（`float*`），改用智能指针或直接存容器（如 `std::vector<float>`），标准库的默认拷贝构造函数就是深拷贝，不用写 `new/delete`，也不用写拷贝构造函数，这是**零原则**。
 
 </details>
 
@@ -462,6 +490,29 @@ shape.Draw();
 > **抽象类**（含有一个纯虚函数的类）无法进行实例化对象。编译器直接禁止的。
 
 抽象类的最大作用是**规定接口**，至于怎么实现，子类决定。
+
+一个抽象类及其派生类的例子：
+
+```cpp
+class FeatureExtractor 
+{
+public:
+    virtual ~FeatureExtractor() = default;
+
+    virtual std::vector<Feature> Extract(const Image& img) = 0;
+};
+
+class OrbExtractor : public FeatureExtractor 
+{
+public:
+    std::vector<Feature> Extract(const Image& img) override 
+    {
+        std::vector<Feature> features;
+        ...
+        return features;
+    }
+};
+```
 
 ### Rule of Zero
 现代 C++ 更推荐 Rule of Zero：尽量使用 `std::vector`、`std::string`、智能指针等 RAII 类型，让标准库帮你管理类。
@@ -676,11 +727,20 @@ Lambda 在现代 C++ 中几乎无处不在：
 ### std::move() 与移动构造函数
 `std::move` 做的事就是把一个左值强行标成右值引用，让你可以把它当作右值一样窃取内部资源，从而避免了昂贵的拷贝。
 
+```cpp
+Image a;
+Image b = a; // 这是拷贝，如果数据很大，很浪费
+
+Image b = std::move(a); // 把 a 变成了可移动的右值，交给 b 处理
+```
+
+
 <details>
-<summary>移动构造函数的内部实现：[点击展开]</summary>
+<summary>移动构造函数的内部实现[点击展开]</summary>
 
 ```cpp
-class Mesh {
+class Mesh 
+{
 public:
     std::vector<float> vertices;  // 用 vector 管理一堆顶点数据
 
@@ -692,7 +752,7 @@ public:
 };
 ```
 
-- 移动构造函数接收一个右值引用作为参数（就是 `&&`）
+- 移动构造函数接收一个**右值引用**作为参数（`&&`）
 - `noexcept`：几乎所有的移动构造函数都应该标记为 noexcept，这样标准库容器（如 std::vector）在扩容时会更高效地使用移动而不是拷贝。
 - 初始化列表里 `vertices(std::move(other.vertices))`：直接调用了 `std::vector` 自己的移动构造函数，把 `other.vertices` 内部指向堆内存的指针“偷”了过来，然后 `other.vertices` 变成空容器。
 </details>
