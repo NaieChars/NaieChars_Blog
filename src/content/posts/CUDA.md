@@ -172,11 +172,13 @@ GPU 的计算流程通常是：
   - `count`：拷贝的字节数
   - `kind`：拷贝方向
 
+
+#### 合并访存
 **合并访存：同一个 Warp 里的 32 个线程，请求的地址是否落在同一个 128 字节的内存块（Cache Line / 内存事务）里**
 
-假设现在有一个二维数组：宽度为 10 个 float （40字节），在显存里它们是连续存储的，第 0 行，0 ~ 39 字节，第 1 行，40 ~ 79 字节。如果现在我们启动一个 Warp 去访问这块显存，**硬件读取内容是按照 128 字节来整体读取一块连续内存**（这里我假设一次读取 128 字节），所以当线程要读地址 40 ~ 79 时，这些地址全部落在第 1 个 128 字节块（0~127）里。这没问题，一次内存事务就搞定了（虽然只用了其中 40 个字节，但至少没跨块），但如果我们去访问第 4 行，120 ~ 127 这部分，在第 1 个 128 字节块里（0~127）；128 ~ 159 这部分，在第 2 个 128 字节块里（128~255）。于是一个 Warp 里的 32 个线程，虽然只连续地访问了 40 个字节，却横跨了两个 128 字节的内存块，硬件不得不发起 **2 次内存事务** 去搬这 40 个字，这就是所谓的**没对齐导致的非合并访存**。
+假设现在有一个二维数组：宽度为 10 个 float （40字节），在显存里它们是连续存储的，第 0 行，0 ~ 39 字节，第 1 行，40 ~ 79 字节。如果现在我们启动一个 Warp 去访问这块显存，**硬件读取内容是按照 128 字节来整体读取一块连续内存**（这里我假设一次读取 128 字节），所以当线程要读地址 40 ~ 79 时，这些地址全部落在第 1 个 128 字节块（0 ~ 127）里。这没问题，一次内存事务就搞定了（虽然只用了其中 40 个字节，但至少没跨块），但如果我们去访问第 4 行，120 ~ 127 这部分，在第 1 个 128 字节块里（0 ~ 127）；128 ~ 159 这部分，在第 2 个 128 字节块里（128~255）。于是一个 Warp 里的 32 个线程，虽然只连续地访问了 40 个字节，却横跨了两个 128 字节的内存块，硬件不得不发起 **2 次内存事务** 去搬这 40 个字，这就是所谓的**没对齐导致的非合并访存**。
 
-对于矩阵、图像等多维数据，CUDA 提供了 `cudaMallocPitch` 和 `cudaMalloc3D` 来解决这类数据容易导致的非合并访存问题。
+对于矩阵、图像等多维数据，**CUDA 提供了 `cudaMallocPitch` 和 `cudaMalloc3D` 来解决这类数据容易导致的非合并访存问题**。
 
 - `cudaMallocPitch`：`cudaError_t cudaMallocPitch(void** devPtr, size_t* pitch, size_t width, size_t height);`
 
@@ -185,6 +187,8 @@ GPU 的计算流程通常是：
 - `cudaMemcpy2D`：`cudaMemcpy2D(dst, dpitch, src, spitch, width, height, kind);`
   
 这里 `dpitch` 和 `spitch` 分别是目标、源的每行跨度
+
+下面给一个代码例子：
 
 ```cpp
 // Host code
@@ -205,8 +209,73 @@ __global__ void MyKernel(float* devPtr, size_t pitch, int width, int height)
             float element = row[c];
         }
     }
+
+    // 实际上上诉代码我们会借助 Idx，不会让每个线程跑几层 for 循环：
+    int c = blockIdx.x * blockDim.x + threadIdx.x; // Col
+    Int r = blockIdx.y * blockDim.y + threadIdx.y; // Row
+
+    if (c < width && r < height)
+    {
+        float* row = (float*)((char*)devPtr + r * pitch);
+        row[c] = 100.0f;
+    }
 }
 ```
+
+> 看 `float* row = (float*)((char*)devPtr + r * pitch);`，其中 `devPtr` 的类型是 `float*`，那么 `devPtr + 1` 就意味着增加 4 个字节。然而 `pitch` 的大小是 1 字节，如果写成 `devPtr + r * pitch`，编译器会以为你要增加 `r * pitch * 4` 个字节，直接找错，所以将 `devPtr` 强制转换成 `*char`，这样 `(*char) + 1` 代表的就是增加一个字节。
+
+
+那么**如何从主机（CPU）端访问和拷贝在设备（GPU）端声明的全局变量或常量变量**（即 `__device__` 和 `__constant__` 变量）？
+
+通过在变量前加上 `__device__` 或 `__constant__` 可以将**变量声明在设备端**，这样他们会存在于 CUDA 上下文中，任何 Kernel 可以直接访问他们（即使没有通过函数参数传入他们）。这会导致一个问题，即 CPU 端并没有这些设备端变量的地址，于是 `cuadMemcpyToSymbol` 允许我们只传入这个变量的符号名，CUDA 底层去查表以找到他们在显存里真正的地址，随后进行拷贝等工作。
+
+```cpp
+__constant__ float constData[256];  // 设备端的常量内存
+float data[256];                    // host 端指针
+cudaMemcpyToSymbol(constData, data, sizeof(data));  // host -> device
+cudaMemcpyFromSymbol(data, constData, sizeof(data));
+```
+
+> 上述示例中的 `constData` 并不是指向数组首元素的地址，也就是说这里并**没有发生退化**，**`constData` 只是一个符号名**
+
+```cpp
+__device__ float* devPointer;
+float* ptr;
+cudaMalloc(&ptr, 256 * sizeof(float));
+cudaMemcpyToSymbol(devPointer, &ptr, sizeof(ptr));
+```
+
+这个例子是一个很巧妙的设计：先在主机端创建一个指针 `ptr`，用 `cudaMalloc` 划分一块显存，并将这块显存的地址赋值给 `ptr`，随后再将 `ptr` 的值拷贝给 CUDA 全局变量 `devPointer`，这样所有的 Kernel 都可以通过 `devPointer` 访问这块显存
+
+> 为什么要绕一圈 Host 端的指针，因为 `cudaMalloc` 是运行时分配显存，`__device__ float* devPointer` 此时并没有指向任何有效的动态显存，所以需要一个 Host 端的指针在运行时接住 `cudaMalloc` 在运行时返回的 GPU 显存。当然你也可以直接传参，通过 kernel 内赋值也可以避免这个问题
+
+### 2.2.3 Shared Memory
+Shared Memory **通过 `__shared__` 声明**，Shared Memory 是 **thread block 级别**的内存，一个 block 里的所有线程都可以进行访问，速度远快于全局内存，生命周期与 block 相同。 
+
+#### 用 Shared Memory 做矩阵乘法分块（tiling）
+
+如果一个矩阵太大，一个 block 的共享内存放不下，那么可以把这个矩阵拆成几个小块，每一个 block 负责一个小块的乘法，最后将各小块拼接起来得到乘法结果，看下面具体的计算例子：
+
+$$
+A_{4 \times 4} \times B_{4\times 4} = C_{4 \times 4} 
+$$
+
+设 `block_size = 2`，那么每一个 thread block 处理一个 2 x 2 的 C 子矩阵，我们将 C 从左至右，从上到下分成 4 个 2 x 2 子矩阵 $C_{00}, C_{01}, C_{10}, C_{11}$，同理 A 与 B 也这样分，那么有如下计算：
+
+$$
+C_{00} = A_{00} \times B_{00} + A_{01} \times B_{10} \\
+C_{01} = A_{00} \times B_{01} + A_{01} \times B_{11} \\
+C_{10} = A_{10} \times B_{00} + A_{11} \times B_{10} \\
+C_{11} = A_{10} \times B_{01} + A_{11} \times B_{11}
+$$
+ 
+$A_{00}$ 同时被 block(0, 0) 和 block(0, 1) 读取，所以 $A_{00}$ 要从全局内存搬 2 次，也就是说：
+
+> 每个 A 的子块从 Global Memory 被读取 `B.width / block_size` 次（即一个 A 子块需要服务多少个横向 C Block）；每个 B 的子块从 Global Memory 被读取 `A.height / block_size` 次
+
+因此 Shared Memory 能**更加节省带宽**。
+
+
 
 ---
 
@@ -218,7 +287,7 @@ __global__ void MyKernel(float* devPtr, size_t pitch, int width, int height)
 >
 > 其实还有一个**坑**。2010年过后Fermi架构使得：当一个 warp 内所有线程请求同一个 global memory 地址时，内存控制器会把这次请求合并成一次物理内存事务，取回数据后**广播（broadcast）** 给这32个线程的寄存器，而不是发起32次独立的内存请求，实际下来tiling能捡到的优化油水非常少，尤其是对于更偏"计算密集"的kernel。（详情见粒子相关的文章）
 
-### __device__函数修饰符
+
 
 ## 一些常用工程技巧
 
