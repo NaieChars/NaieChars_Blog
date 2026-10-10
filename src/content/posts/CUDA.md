@@ -252,7 +252,8 @@ cudaMemcpyToSymbol(devPointer, &ptr, sizeof(ptr));
 ### 2.2.3 Shared Memory
 Shared Memory **通过 `__shared__` 声明**，Shared Memory 是 **thread block 级别**的内存，一个 block 里的所有线程都可以进行访问，速度远快于全局内存，生命周期与 block 相同。 
 
-#### 用 Shared Memory 做矩阵乘法分块（tiling）
+#### tiling 技术
+**用 Shared Memory 做矩阵乘法分块**
 
 如果一个矩阵太大，一个 block 的共享内存放不下，那么可以把这个矩阵拆成几个小块，每一个 block 负责一个小块的乘法，最后将各小块拼接起来得到乘法结果，看下面具体的计算例子：
 
@@ -413,11 +414,128 @@ FFMA sum3, R7, R8, sum3   // sum3 += a[3]*b[3]
 ### 3.1.3 同步指令
 `__syncthreads()` 会占用 4 个时钟周期来为一个 warp 发出指令，因此尽量减少不必要的 `__syncthreads()` 调用，使用 `__restrict__` 指针可以帮助编译器优化掉一些不必要的同步
 
-# 4. 协作组
-## 4.1 同步函数
+# 4. C++ 扩展上的 CUDA 语法
+## 4.1 函数执行空间限定符
+### 4.1.1 `__global__`
+### 4.1.2 `__device__`
+### 4.1.3 `__host__`
+有连体标签：`__host__ __device__`。作用：让**同一份代码**，既能在 CPU 上跑，也能在 GPU 上跑。编译器会自动帮你生成两份机器码，以此提高代码复用率
+
+### 4.1.4 Undefined Behavior
+> [!WARNING]
+不要跨界调用，在有 `__CUDA_ARCH__`（GPU代码）里调用只标明了 `__host__` 的代码是未定义的；同理在 CPU 代码里也一样。
+
+### 4.1.5 内联微调
+1. `__forceinline__`：**强制内联**。主要用于极其频繁调用、逻辑简单的小函数。如果**你确定**某个函数内联后能**大幅提升性能**，就用它
+2. `__noinline__`：**拒绝内联**。主要用于**极其庞大**的函数，如果内联，代码体积暴增导致 I-Cache 暴跌，或寄存器溢出到本地内存，增加了访存开销
+3. `__inline_hint__`：**建议内联**。
+
+> [!WARNING]
+> 1. **不能用在 `inline` 函数上**：CUDA 里的这些限定符和 C++ 原生的 `inline` 关键字不要混用。
+> 2. **不能用在 `__global__` 核函数上**：这些只针对 `__device__` 函数，Kernel 是入口，它没法被谁内联。
+
+## 4.2 空间限定符
+### 4.2.1 不加任何标签
+自动变量，如 `int a = 0`，通常存进寄存器里，如果寄存器不够会溢出到本地内存，性能暴跌
+
+### 4.2.2 `__device__`
+存进全局内存。  
+机制：读取时走 L1/L2，如果 Warp 里的 32 个线程读**不同地址**，它支持得很好（**Coalescing合并访问**）。但如果有 32 个线程读**同一个地址**，全局内存会 **braodcast**，但延迟依然很高。
+
+### 4.2.3 `__constant__`
+存进常量内存，生命周期 = 程序。  
+机制：背后有专用的**常量缓存（Constant Cache）**。当 Warp 里的 32 个线程**全部读取同一个地址**时，它会以极快的速度进行一次 **Broadcast**，完美命中。**但它的致命弱点在这里**：如果 Warp 里的 32 个线程读**不同地址**，就会发生 **“串行化（Serialization）”**，性能直接暴跌 32 倍。  
+数据存放建议：存放**所有线程共享的、全程不变的参数**。比如：卷积核的权重、物理模拟里的重力加速度 `g`、矩阵的维度大小。
+
+在 CPU 端对这类 GPU 变量进行赋值：
+```cpp
+__device__ int dev_var;
+__constant__ int const_var;
+
+// 主机端（CPU）操作：
+cudaMemcpyToSymbol(const_var, &host_val, sizeof(int)); // 往常量内存里传值
+cudaMemcpyFromSymbol(&host_val, dev_var, sizeof(int)); // 从全局内存里拿值
+cudaGetSymbolAddress(&ptr, dev_var); // 获取它在 GPU 上的真实指针
+```
+
+>`cudaMemcpy` 传的是“地址”，`cudaMemcpyToSymbol` 传的是“变量名”。  
+> 定义的时候**不能初始化**（`__constant__ int x = 5;` 在某些版本会报错）。必须先启动一次，在 CPU 端用 `cudaMemcpyToSymbol` 赋值，然后再启动 Kernel 使用。
+
+### 4.2.4 `__shared__`
+共享内存是每一个 block 私有的，没有全局唯一的固定地址。
+
+#### 4.2.4.1 动态共享内存
+允许在启动 kernel 之后，从外面传一个大小进去；与之相反的是静态共享内存，例如 `__shared__ float share[16][16]`，大小在编译期就写死了，不能修改。
+
+动态共享内存使用示例：
+```cpp
+// 声明时，前面加 extern
+__global__ void myKernel(float* data) 
+{
+    extern __shared__ float sdata[]; // 注意：这里没写大小！只是一个占位符
+    // ...
+}
+
+// 传大小
+int shared_mem_size = 1024 * sizeof(float); // 比如我要 4KB
+myKernel<<<grid, block, shared_mem_size>>>(data); //  <<< >>> 中的第三个参数就是我们动态指定的共享内存大小
+```
+
+如果想搞三个数组：`short array0[128]`、`float array1[64]`、`int array2[256]`，它们紧挨着放。由于动态共享内存只给了你一个**起始地址**（`array`），它是一段连续的字节。对于多种不同类型的数据（比如 `short`、`float`、`int`），你必须自己规划怎么切。
+
+```cpp
+extern __shared__ float array[];
+__device__ void func() // __device__ or __global__ function
+{
+  short* array0 = (short*)array;
+  float* array1 = (float*)&array0[128];
+  int* array2 = (int*)&array1[64]
+}
+```
+`float` 与 `int` 类型要求 4 字节对齐（首地址必须是 4 的倍数），如果上述代码变成 `float* array1 = (float*)&array0[127];`报错。
+
+### 4.2.5 `__grid_constant__`
+这是一个性能补丁。对于计算能力大于等于 7.0 的架构，`__grid_constant__` 用于修饰一个 **`const` 限定的、非引用类型、只读的 `__global__` 函数参数**
+
+**解决的问题**：如果在 CPU 端定义了一个很大的结构体`s`，里面可能是一个大矩阵，将后作为参数**按值传递**给 kernel，按值传递则意味着**每一个线程都认为自己拿到了一份独立的**`s`。当你在 kernel 里尝试获取 `s` 的地址，编译器会被迫在每一个线程的本地内存上，为 `s` 复制一份副本！因此用 `__grid_constant__` 告诉编译器，这个参数是只读，所有线程都共用一个地址（指针）。
+
+在之前的矩阵分块例子中，可以将核函数声明修改成这样：
+```cpp
+__global__ void matMul(const __grid_constant__ Matrix A, const __grid_constant__ Matrix B,  Matrix C);
+```
+
+### 4.2.6 `__restrict__`
+`__restrict__` 主要解决的是别名问题，例如下面代码
+
+```cpp
+void foo(const float* a,
+         const float* b,
+         float* c)
+{
+    c[0] = a[0] * b[0];
+    c[1] = a[0] * b[0];
+    c[2] = a[0] * b[0] * a[1];
+    // ...
+}
+```
+在 C 类语言中，指针 `a`、`b` 和 `c` 可能存在别名（即指向同一块内存），因此任何通过 `c` 进行的写入都可能修改 `a` 或 `b` 的元素。这意味着为了保证功能正确性，编译器**不能**将 `a[0]` 和 `b[0]` 加载到寄存器中，相乘，然后把结果同时存入 `c[0]` 和 `c[1]`  
+
+通过将 `a`、`b`、`c` 设为受限指针，程序员向编译器断言：这些指针实际上没有别名，在这种情况下意味着通过 `c` 的写入永远不会覆盖 `a` 或 `b` 的元素
+
+> [!NOTE]
+> **所有指针参数都需要被设为受限的**，编译器优化器才能从中获得任何好处
+
+如果在 Kernel 里输入输出是两块完全不同的显存，无脑加上 `__restrict__`：
+
+```cpp
+__global__ void kernel(const float* __restrict__ input, float* __restrict__ output)
+```
+
+# 5. 协作组
+## 5.1 同步函数
 `__syncthreads()` 阻塞当前线程，直到**同一个 Block** 内的所有线程都执行到了这个点。并且保证：在此之前，所有线程对全局内存和共享内存的写入，对 Block 内其他线程都可见了。（在GPU里写操作一般不会立刻写到全局内存或共享内存，而是先写进**写缓冲区**，或在 L1 里挂着，这里的可见性就是强制要求把所有线程的写操作全部刷到共享内存和全局内存，确保大家都看得见，这样之后比如 warp1 读取共享内存就一定可以读取到 warp0 计算得到的数据
 
-> 致命陷阱：
+> **致命陷阱**：  
 > `__syncthreads()` 允许放在条件语句（如 `if`）里，但条件必须对整个 Block 的评估结果一致！如果条件依赖 `threadIdx.x`，导致一半线程进 if，一半不进，`__syncthreads()` 就会造成**死锁（挂起）**或未定义行为
 
 ```cpp
@@ -428,6 +546,19 @@ if (threadIdx.x < 16)
 }
 ```
 
+其余三种同步函数：
+```cpp
+int __syncthreads_count(int predicate);    // 统计 predicate 非零的线程有多少个
+int __syncthreads_and(int predicate);      // 所有线程都满足条件返回1，否则为0
+int __syncthreads_or(int predicate);       // 只要有一个线程的条件判断为1，则函数返回1，否则为0
+```
+
+参数通常写成布尔条件，返回值是**同一个 Block 内所有线程投票后的结果**，而且这个结果会**返回给 Block 内的每一个线程**。主要用途是检查“是否存在某个事件”，比如“是否有线程发现了错误”“是否有线程已经完成了某个任务”。
+
+**Warp 级同步：`__syncwarp(unsigned mask=0xffffffff)`**  
+由于在 Volta 架构之后，实现了独立线程调度，所以需要在 warp 内设置同步。mask是一个 32 位无符号整数，`0xffffffff` 换算成3进制就是32个1，表示要等待32个线程
+- 每个调用线程必须把自己的位 (bit) 设置在 mask 中
+- 内存保证
 
 ---
 
