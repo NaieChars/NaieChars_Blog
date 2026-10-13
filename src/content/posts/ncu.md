@@ -5,7 +5,7 @@ pinned: true
 description: cuda 性能分析常用指标汇总
 tags: [CUDA, Nsight Compute]
 category: 技术
-draft: flase
+draft: false
 ---
 
 # Nsight Compute 常用性能指标
