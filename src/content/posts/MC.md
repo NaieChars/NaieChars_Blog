@@ -5,7 +5,7 @@ pinned: true
 description: 最近在看 MC 光影 Complementary 代码，发现了很多巧妙的设计
 tags: [MC, 光影]
 category: 技术
-draft: false
+draft: true
 ---
 
 很多变量由Iris/MC传进着色器，这里提供 [Iris API 文档](https://shaders.properties/current/reference/overview/)，方便查看
