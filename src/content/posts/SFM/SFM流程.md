@@ -1,5 +1,5 @@
 ---
-title: 数漫多视觉融合三维重建（大二上版本）-SFM流程理论学习
+title: 多视觉融合三维重建-SFM理论
 published: 2026-08-04
 pinned: true
 description: 关于SFM的一些学习笔记，偏个人向。
