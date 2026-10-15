@@ -1,5 +1,5 @@
 ---
-title: 分析 Nsight Compute 性能指标参数
+title: 常用 Nsight Compute 性能指标参数
 published: 2026-10-08
 pinned: true
 description: cuda 性能分析常用指标汇总
