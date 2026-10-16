@@ -1,5 +1,5 @@
 ---
-title: 合并访存与转置矩阵性能指标分析
+title: CUDA 合并访存与转置矩阵性能指标分析
 published: 2026-10-01
 pinned: true
 tags: [CUDA]
@@ -8,6 +8,8 @@ draft: false
 ---
 
 [实验源码与本地测量数据](https://github.com/NaieChars/CUDA-/tree/main/labs/day04_coalescing)
+
+>环境配置：RTX 5060 Laptop GPU，26 SM，L2=32 MiB，驱动 592.00，CUDA 12.8.61，Nsight Compute 2025.2.0；Windows，Release、原配置 native 架构、-lineinfo
 
 # 1. 前言
 对一个 `4096 × 4096` 的 `float` 矩阵进行转置一般有三种算法：朴素方法，Tiling 做法以及线程循环 Tiling。本实验主体包括但不限于上述三种算法，同时对他们分别进行了 ncu 指标测量。
