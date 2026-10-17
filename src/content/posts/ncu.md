@@ -20,6 +20,7 @@ draft: false
 | `lts__` | L2 Cache 相关硬件 |
 | `dram__` | GPU 外部显存 DRAM |
 | `launch__` | Kernel 启动配置及资源限制 |
+| `l1tex__lsuin_requests` | LSU 请求入口的繁忙程度。 |
 
 ### 常用后缀
 | 后缀 | 人话解释 |
@@ -85,6 +86,9 @@ draft: false
 
 3. `1tex__data_pipe_lsu_wavefronts_mem_shared_op_st.sum`  
 含义：为完成共享内存读取操作，L1/TEX 数据处理通路需要处理的 Wavefront 总数。
+
+4. `l1tex__data_pipe_lsu_wavefronts`  
+含义：硬件处理访存请求时所使用的工作单元的活动程度
 
 ## Launch 与资源限制
 **Occupancy** 是 SM 上活动 Warp 数量相对于最大可容纳 Warp 数量的比例。 更高的 Occupancy 不保证更快，但较低的 Occupancy 可能减少隐藏访存延迟的能力。
