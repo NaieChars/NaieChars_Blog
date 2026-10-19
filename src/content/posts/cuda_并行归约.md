@@ -20,6 +20,137 @@ draft: false
 # 1. 前言
 **归约**即对一个数组进行某些操作使得最后输出一个数。本实验的归约指将一个数组全部元素求和，输出最终求和结果。与[合并访存](cuda_合并访存.md)类似，本实验从**三个版本的核函数**进行性能分析：**shared 版**（每个线程读取一个数值 + 共享内存），**multi 版**（每个线程读取多个数值，串行累加再求和），**shuffle 版**（线程之间的通讯不经过共享内存，通过 `__shfl_down_sync` 实现）。
 
+这里给出我的三个实验核函数代码：
+
+### shared 版
+```cpp
+__global__ void reduce_shared(const float* __restrict__ in, float* __restrict__ partial, size_t n)
+{
+    // TODO 1: implement a shared-memory block reduction.
+    // Contract: items_per_thread = 1; block b handles at most blockDim.x inputs.
+    // Decide how to handle the tail, combine values, synchronize, and write
+    // exactly one sum to partial[blockIdx.x].
+    // No algorithm is supplied here; enable kSharedImplemented when ready.
+
+    extern __shared__ float s[];
+    const unsigned int tid = threadIdx.x; // tid: 单个 block 里的线程索引
+    const size_t Idx = static_cast<size_t>(blockDim.x) * blockIdx.x + tid;
+
+    s[tid] = Idx < n ? in[Idx] : 0.0f;  // 一个线程读取一个元素，放到共享内存
+    __syncthreads();
+
+    for (unsigned int stride = blockDim.x >> 1; stride > 0; stride >>= 1)
+    {
+        if (tid < stride)
+            s[tid] += s[tid + stride];
+
+        if (stride > 1)
+            __syncthreads();
+    }
+
+    if (tid == 0)
+    {
+        partial[blockIdx.x] = s[0];
+    }
+}
+```
+### multi 版
+```cpp
+__global__ void reduce_multi_item(const float* in, float* partial,
+                                  size_t n, int items_per_thread)
+{
+    // TODO 2: implement the multi-item version.
+    // Each block owns one contiguous chunk of blockDim.x * items_per_thread
+    // elements. Thread-to-element assignment and accumulation are your choices.
+    // The output contract is the same as TODO 1.
+
+    extern __shared__ float s[];
+    const unsigned int tid = threadIdx.x;
+    const size_t base = static_cast<size_t>(blockIdx.x) * items_per_thread * blockDim.x;    // 一个 block 的起始全局索引
+
+    float sum = 0.0f;
+    for (int j = 0; j < items_per_thread; j++)
+    {
+        const size_t idx = base + tid + static_cast<size_t>(blockDim.x) * j;
+
+        if (idx < n)
+            sum += in[idx];
+    }
+    s[tid] = sum;
+    __syncthreads();
+
+
+    for (unsigned int stride = blockDim.x >> 1; stride > 0; stride >>= 1)
+    {
+        if (tid < stride)
+            s[tid] += s[tid + stride];
+
+        if (stride > 1)
+            __syncthreads();
+    }
+
+    if (tid == 0)
+    {
+        partial[blockIdx.x] = s[0];
+    }
+}
+```
+
+### shuffle 版
+```cpp
+// tools: 工具函数，计算一个 warp 内所有线程的和
+__device__ __forceinline__ float warp_sum(float value)
+{
+    for (int offset = 16; offset > 0; offset >>= 1)
+    {
+        value += __shfl_down_sync(0xffffffffu, value, offset);
+    }
+    return value;
+}
+
+__global__ void reduce_shuffle(const float* in, float* partial,
+                               size_t n, int items_per_thread)
+{
+    // TODO 3: implement the warp-shuffle version.
+    // Input ownership is identical to TODO 2. Decide how values move within
+    // and between warps and which synchronization/masks are required.
+    // The output contract is the same as TODO 1.
+    const unsigned int tid = threadIdx.x;
+    const unsigned int warp_id = tid / 32;
+    const unsigned int lane = tid % 32;
+    const size_t base = static_cast<size_t>(blockIdx.x) * items_per_thread * blockDim.x;
+
+    // 每一个线程内部串行求和
+    float sum = 0.0f;
+    for (int j = 0; j < items_per_thread; j++)
+    {
+        const size_t idx = base + tid + static_cast<size_t>(blockDim.x) * j;
+
+        if (idx < n)
+            sum += in[idx];
+    }
+
+    extern __shared__ float warp_sums[];
+    
+    sum = warp_sum(sum);
+    if (lane == 0)
+        warp_sums[warp_id] = sum;
+    
+    __syncthreads();
+    
+    // 再将每一个 warp 的 sum 从共享内存搬回线程进行计算，这里用第一个 warp 计算即可
+    const unsigned int num_warps = blockDim.x / 32;
+    if (warp_id == 0)
+    {
+        float block_sum = (lane < num_warps) ? warp_sums[lane] : 0.0f;
+        block_sum = warp_sum(block_sum);
+
+        if (lane == 0)
+            partial[blockIdx.x] = block_sum;
+    }
+}
+```
+
 # 2. 实验结果
 
 测试对象包含 5 个：shared I=1，multi_item I=1，shuffle I=1，multi_item I=4，shuffle I=4
