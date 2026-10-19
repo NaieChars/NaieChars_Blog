@@ -54,6 +54,9 @@ __global__ void reduce_shared(const float* __restrict__ in, float* __restrict__ 
     }
 }
 ```
+
+**shared 版本实现思路**：一个线程读取一个元素，放到 shared memory（这里同步一次），随后通过 stride 迭代对 shared memory 里的线程经求和，每一个线程都会进行一次求和（每次求和完由于会覆写 shared memory，需要同步一次），但是只有 lane = 0 的线程求和结果才是一个 block 的求和。（由于我们需要进行 block 内的线程同步，其余线程的计算不得不参与计算）。
+
 ### multi 版
 ```cpp
 __global__ void reduce_multi_item(const float* in, float* partial,
@@ -95,6 +98,8 @@ __global__ void reduce_multi_item(const float* in, float* partial,
     }
 }
 ```
+
+**multi 版实现思路：**一个线程读取 4 个元素并在线程内部进行累加（默认为 4）。读取的四个元素在同一列，但是他们的行是分开读取的。这样可以通过线程的串行计算来分摊 block 内的通讯与控制开销。
 
 ### shuffle 版
 ```cpp
@@ -150,6 +155,8 @@ __global__ void reduce_shuffle(const float* in, float* partial,
     }
 }
 ```
+
+**shuffle 版本实现思路**：一个 warp 内部的线程数据可以直接相互交流（warp 内的一个线程负责输出该 warp 的线程求和），而不用走 shared memory，最后将每一个 warp 的求和结果搬到 shared memory，进行最后的 block 求和。同样，该版本继承了 multi 版的线程串行求和。
 
 # 2. 实验结果
 
