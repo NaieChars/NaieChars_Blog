@@ -166,7 +166,7 @@ class CodeBlockCollapser {
 		}
 
 		this.log("Adding collapse feature to code block");
-		codeBlock.classList.add("collapsible", "expanded");
+		codeBlock.classList.add("collapsible", "collapsed");
 
 		const toggleBtn = this.createToggleButton();
 		frame.appendChild(toggleBtn);
