@@ -328,7 +328,7 @@ nslookup -type=A www.naie-char.cc. 1.1.1.1
 
 - No response from server：指定 DNS 服务器查询 www.baidu.com.与目标网址：
   - 如果指定后可以访问，需要调整网卡的 DNS 设置，将首选 DNS 改为指定 DNS 服务器，然后 ipconfig /flushdns 清除客户端缓存。新注册的网站 DNS 解析不了，可能原因在于 DNS 解析器里还有**负缓存**（把“查询结果不存在”也暂时保存下来，避免反复查询），ipconfig /flushdns 并不会清除 DNS 服务端的缓存，所以新注册的网站并不会 DNS 成功
-- NEDOMAIN：检查网站的拼写正确
+- NXDOMAIN：检查网站的拼写正确
 - REFUSED：可能是服务器拒绝 DNS 查询
 
 > [!NOTE]
