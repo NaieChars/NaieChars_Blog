@@ -15,7 +15,7 @@ export const friendsData: FriendItem[] = [
 	{
 		id: 1,
 		title: "Honaisu",
-		imgurl: "https://honaisu.cd.bcebos.com/images/website/blog-icon.jpg",
+		imgurl: "https://cdn.denvoshome.xyz/",
 		desc: "时光流转,岁月更迭",
 		siteurl: "https://www.denvoshome.xyz/",
 		tags: ["link"],
