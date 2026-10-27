@@ -10,6 +10,9 @@ draft: false
 
 [查看源码](https://github.com/NaieChars/CUDA-/blob/main/labs/sgemm/src/main.cu)
 
+> [!WARNING]
+> 本文待修订完成！
+
 # C++ 部分
 
 > [!NOTE]
@@ -468,3 +471,429 @@ std::puts(
 源码换行本身不会成为输出换行，文本里的 `\n` 才负责换行；puts 还会在输出末尾额外写入一个换行。字面量相邻拼接只适用于这种语法，两个字符串变量不能直接并排书写来拼接。
 
 本节待自测：若收到 `sgemm 2 --warmup 0 64 --iterations 5 32 16`，positional 最终有哪些字符串？哪些 Options 成员被覆盖？暂不要求运行 GPU，先按读取游标推导。
+
+3. validate：数值判定与错误诊断
+
+> **作用**：比较已经位于主机内存的 GPU 输出与 CPU double 参考结果，统计误差并返回是否通过。数据拷贝与后续流程由调用者负责。
+
+## 3.1 接口：借用输入，返回判定
+
+```cpp
+bool validate(const std::vector<float>& actual, const std::vector<double>& reference,
+              const Options& options, const char* phase)
+```
+
+actual、reference 和 options 都通过 const 引用读取，沿用前文的借用方式。phase 是本次校验的阶段标签，例如 `"before"`、`"after"`，用于让日志说明结果来自哪次检查。
+
+这里有三类输出：bool 返回是否通过；汇总日志报告错误规模和最严重程度；首个错误日志提供定位线索。数值不匹配时返回 false，由 run 决定是否停止实验并返回校验失败退出码。
+
+这种分工让同一个校验函数可以在实验的不同阶段复用。
+
+## 3.2 绝对误差与混合容差
+
+```cpp
+const double error = std::isfinite(actual[i])
+    ? std::abs(static_cast<double>(actual[i]) - reference[i])
+    : std::numeric_limits<double>::infinity();
+const double allowed = options.atol + options.rtol * std::abs(reference[i]);
+```
+
+对有限的实际结果，单元素通过条件为：
+
+```text
+error = |actual - reference|
+allowed = atol + rtol × |reference|
+error ≤ allowed
+```
+
+atol 是绝对容差，提供接近零时仍可使用的误差额度；rtol 是相对容差，使允许误差随参考值的量级增大。当前公式将两者相加。
+
+以默认 atol=rtol=0.0001 为例，下面按公式计算：
+
+| reference | actual | error | allowed | 判定 |
+| --- | --- | --- | --- | --- |
+| 10000 | 10000.5 | 0.5 | 1.0001 | 通过 |
+| 1 | 1.5 | 0.5 | 0.0002 | 失败 |
+| 0 | 0 | 0 | 0.0001 | 通过 |
+
+相同的绝对误差，在不同量级上可能得到不同判定。参考值为零时，相对容差项也为零，绝对容差继续提供误差额度。
+
+浮点累加的顺序和精度会影响结果，CPU 与 GPU 也可能采用不同的运算组织方式，因此需要根据算法需求选择合适的容差。[NVIDIA：参考结果比较](https://docs.nvidia.com/cuda/cuda-c-best-practices-guide/index.html#reference-comparison)、[浮点数精度](https://docs.nvidia.com/cuda/cuda-c-best-practices-guide/index.html#numerical-accuracy-and-precision)
+
+把实际值提升为 double，是在 double 精度下计算对照误差；它无法恢复 GPU float 计算已经舍入掉的信息。CPU double 结果提高了对照计算的精度，也仍属于有限精度计算。
+
+## 3.3 条件运算符：构造诊断值
+
+```cpp
+条件 ? 条件为真时的表达式 : 条件为假时的表达式
+```
+
+`?:` 是条件运算符，会产生一个值，只有选中的分支会被求值。因此，它适合在声明 const 变量时，根据条件选择初始化值。[标准草案：条件运算符](https://eel.is/c++draft/expr.cond)
+
+在 error 的初始化中，有限 actual 使用误差计算；非有限 actual 统一映射成正无穷，作为失败诊断值。`std::numeric_limits<double>::infinity()` 取得浮点类型的正无穷值。
+
+为什么要显式处理 NaN？NaN 参与这里的 `>` 等有序比较时结果为 false，若只靠 `error > allowed`，可能漏掉非法结果。因此，后面的失败条件也显式包含 `!std::isfinite(actual[i])`。
+
+## 3.4 scaled：误差占允许额度的多少倍
+
+```cpp
+const double scaled = !std::isfinite(error) ? std::numeric_limits<double>::infinity() :
+    (allowed > 0 ? error / allowed :
+     (error == 0 ? 0 : std::numeric_limits<double>::infinity()));
+```
+
+通常情况下，`scaled = error / allowed`。它是一个以容差为基准的无量纲比值：0.5 表示用掉一半允许额度，1 表示恰好到达边界，2 表示误差达到允许值的两倍。
+
+这个指标用到了 atol 和 rtol，不能把它简单记为“相对误差”。
+
+嵌套表达式可以按下面的分支理解。以下为讲解用等价展开，未修改源码；inf 代表正无穷：
+
+```cpp
+const double inf = std::numeric_limits<double>::infinity();
+double scaled;
+if (!std::isfinite(error))
+    scaled = inf;
+else if (allowed > 0)
+    scaled = error / allowed;
+else if (error == 0)
+    scaled = 0;
+else
+    scaled = inf;
+```
+
+允许 atol 和 rtol 同时为零，就需要明确规定零容差下的诊断行为：误差为零时记为 0；误差大于零时记为无穷。条件分支避免直接计算 `0 / 0`。
+
+**设计思维**：除了定义通过条件，还应为异常值和边界输入定义可解释的诊断结果。
+
+## 3.5 一次遍历，收集不同层次的信息
+
+```cpp
+max_absolute = std::max(max_absolute, error);
+max_scaled = std::max(max_scaled, scaled);
+if (!std::isfinite(actual[i]) || error > allowed)
+{
+    if (failed == 0) first_bad = i;
+    ++failed;
+}
+```
+
+| 变量 | 回答的问题 |
+| --- | --- |
+| failed | 一共有多少元素不合格？ |
+| max_absolute | 最大绝对误差是多少？ |
+| max_scaled | 最严重的误差达到容差额度的多少倍？ |
+| first_bad | 按遍历顺序，第一个错误在哪里？ |
+
+两个最大值可能来自不同元素；first_bad 也不一定对应最大误差。它们分别服务于误差概况和快速定位。
+
+`if (failed == 0)` 只在首次失败时记录下标，随后递增失败计数。循环继续扫描所有元素，才能获得完整数量和最大误差，而不是在首次失败后立即结束。
+
+first_bad 初始为 0 并不表示“没有错误”；是否存在错误由 failed 决定。否则，下标 0 真正出错时就容易与“没找到”混淆。
+
+这里的比较扫描时间复杂度为 O(M×N)，额外统计空间为 O(1)；构造 CPU GEMM 参考结果的 O(M×N×K) 开销属于 run 中的另一个步骤。
+
+## 3.6 从线性下标定位到矩阵坐标
+
+```cpp
+first_bad / options.n  // row
+first_bad % options.n  // col
+```
+
+对于行主序 C[M,N]：`i = row * N + col`，因此除以行宽 N 得到行号，取余得到列号。
+
+例如 N=4、first_bad=6，对应零起始坐标 row=1、col=2。这让诊断信息可以直接关联到核函数的输出索引。
+
+## 3.7 日志格式也属于工程接口
+
+```text
+Check | phase=... | status=... | checked=full | elements=... | failed=...
+Mismatch | row=... | col=... | expected=... | actual=...
+```
+
+稳定的记录类型和 `key=value` 字段，同时方便人阅读和脚本提取。成功时输出汇总，失败时补充首个错误详情，避免一次打印整个错误矩阵。
+
+源码中的格式说明符可以这样读：
+
+| 格式 | 实参类型与含义 |
+| --- | --- |
+| `%s` | C 字符串，例如 phase 或 PASS/FAIL |
+| `%zu` | size_t，例如元素数和下标 |
+| `%.9g` | double，按 g 格式输出，精度为 9 位有效数字 |
+| `%.12g` | double，精度为 12 位有效数字，用于详细对照 |
+
+`g` 根据数值选择普通或科学计数形式，精度表示有效数字位数，并非固定小数位数；默认还会去掉不必要的尾随零。printf 的格式说明与实参类型需要匹配，不能因为某些类型在当前平台同宽就随意混用。[Microsoft：printf 格式说明](https://learn.microsoft.com/en-us/cpp/c-runtime-library/format-specification-syntax-printf-and-wprintf-functions?view=msvc-170)
+
+## 3.8 当前函数依赖的输入契约
+
+调用者需要保证两份数组形状匹配、长度为 M×N、N>0，并提供有限的参考结果及合理的有限非负容差。当前 run 按相同 count_c 分配 actual 和 reference，再产生参考数据。
+
+validate 本身没有重新检查数组长度或 reference 的有限性。若将它提取到其他工程中复用，需要重新决定这些前提由调用者保证，还是由函数自行检查。
+
+PASS 表示本次输入在指定容差下通过了完整输出比较，不等于证明所有输入都正确，也不替代越界、竞争和同步依赖方面的检查。
+
+本节待自测：reference=0、atol=0、rtol=0 时，actual=0 与 actual=0.125 各自得到怎样的 error、allowed、scaled 和判定？先按分支推导，不要求运行 GPU。
+
+# 4. run：把资源、算子与测量组织成一次实验
+
+run 的主要职责是实验编排。先处理信息查询与执行条件，再准备数据和资源，最后选择检查、计时或采集路径。
+
+```text
+help / list / plan → 输出信息后返回
+    ↓ 需要实际执行时
+检查实现状态与设备限制 → 准备输入和 CPU 参考结果 → 分配并初始化显存
+    ↓
+首次 GEMM → 等待完成 → 校验 before
+    ├─ check-only：返回
+    ├─ profile：预热 → 开启采集 → GEMM → 等待完成 → 关闭采集 → 校验 after
+    └─ 普通计时：预热 → 事件计时下重复 GEMM → 校验 after → 输出平均耗时和 GFLOP/s
+```
+
+## 4.1 用接口区分描述、计划与执行
+
+```cpp
+const auto& variant = gemm_variant(options.mode);
+const auto launch = make_gemm_launch(options.mode, options.m, options.n);
+```
+
+variant 借用已有的 GemmVariant 描述，launch 则持有按当前形状计算得到的 GemmLaunch 值。这里的引用或值选择与被调用函数的返回接口相对应，不必把所有 auto 都写成引用。
+
+将元数据、启动配置与真正执行拆开后，`--plan` 可以只计算并展示 grid、block 和 shared 大小；实际执行前再检查设备的线程数、网格大小和 shared 容量限制。昂贵的参考计算和资源分配安排在这些检查之后。
+
+其中 `cudaDeviceProp properties{};` 用空花括号把这个结构体初始化到零等初始状态，随后由 cudaGetDeviceProperties 填充。
+
+## 4.2 准备可复现的输入与独立参考
+
+输入使用固定公式生成，A、B 的公式不同，数值包含正负号，并乘以 `0.03125f`，即可以用二进制精确表示的 1/32。这样可以复现实验输入，也避免统一常量输入掩盖部分索引错误。
+
+CPU 参考计算采用 row → inner → col 的顺序：最内层 col 连续访问 B 的一行与 reference 的一行，提高局部性；double 用于参考累加。这一过程位于事件计时区间外。
+
+run 通过 `CudaBuffer<float>` 持有显存，通过 `.get()` 借用设备指针交给 CUDA API。主机 vector 的 `.data()` 同样提供其连续存储的指针。这些调用提供底层接口所需的地址，资源所有权仍属于对应容器或封装对象，具体 RAII 实现留到头文件部分。
+
+## 4.3 lambda：把已经绑定上下文的操作交给计时器
+
+```cpp
+auto gemm = [&]() {
+    launch_gemm(options.mode, device_a.get(), device_b.get(), device_c.get(),
+                options.m, options.n, options.k, launch);
+};
+auto check_result = [&](const char* phase) {
+    CUDA_CHECK(cudaMemcpy(actual.data(), device_c.get(), count_c * sizeof(float), cudaMemcpyDeviceToHost));
+    return validate(actual, reference, options, phase);
+};
+```
+
+lambda 表达式产生一个具有编译器生成类型的闭包对象，auto 接住这个对象；`gemm()` 则调用它。[标准草案：闭包类型](https://eel.is/c++draft/expr.prim.lambda.closure)
+
+`[&]` 使这里需要捕获的外部局部变量按引用捕获；lambda 可以使用现有配置和缓冲区，无需把它们重新列为每次调用的参数。check_result 的 phase 是每次调用时传入的参数，它的 bool 返回类型由 return 表达式推导。[标准草案：lambda 捕获](https://eel.is/c++draft/expr.prim.lambda.capture)
+
+这里选择引用捕获也与所有权设计一致：CudaBuffer 禁止复制，直接将 gemm 改成 `[=]` 会尝试复制捕获的缓冲区对象，无法编译。引用捕获借用资源，不转移所有权，也不延长被捕获对象的生命周期；当前两个 lambda 都只在 run 内使用。
+
+```cpp
+const float ms = timer.benchmark(gemm, options.warmup, options.iterations);
+```
+
+这个接口把职责拆开：run 定义“一次工作是什么”，计时器负责“预热几次、执行几次、怎样测量”。捕获型 lambda 携带上下文，计时器通过模板接收可调用对象，具体模板和引用语义在 cuda_timer.cuh 一节继续展开。
+
+当前 GEMM 接口要求每次覆盖 C，结果只依赖 A、B。重复调用因此使用相同工作负载，不会因为持续累加旧 C 而改变数值含义。
+
+## 4.4 输出哨兵：使漏写能够显现
+
+```cpp
+CUDA_CHECK(cudaMemset(device_c.get(), 0xff, count_c * sizeof(float)));
+```
+
+cudaMemset 按字节填充；每个 float 的四个字节都写成 0xff，形成位模式 0xffffffff，在 CUDA 使用的 IEEE 754 binary32 表示中是 NaN。它不是把每个 float 赋成数值 255。[NVIDIA：cudaMemset](https://docs.nvidia.com/cuda/cuda-runtime-api/cuda_runtime_api/group__CUDART__MEMORY.html)
+
+如果核函数遗漏某个输出，保留下来的 NaN 会被 validate 拒绝。若预先清零，遗漏位置恰好应为零时可能误通过。这体现了主动设计测试初始状态的思路。
+
+当前代码只在首次执行前填充一次哨兵；后续 after 校验检查最终结果，不单独证明每一轮都完整写过输出。
+
+## 4.5 将正确性检查放在测量边界两侧
+
+首次执行后先同步并检查 before，避免对当前输入下结果不合格的实现继续报告性能；普通计时和 profile 路径结束后再检查 after。
+
+| 路径 | 主要用途 | before 通过后的操作 |
+| --- | --- | --- |
+| check-only | 快速进行数值检查 | 直接返回 |
+| 普通计时 | 获得重复执行的平均时间 | 预热、计时、检查 after、计算吞吐率 |
+| profile | 采集核函数指标 | 预热、标记采集范围、检查 after |
+
+gemm 调用完成只表示主机端的启动操作返回，GPU 核函数可能尚未完成。当前代码在读取首次结果和关闭采集范围前使用 cudaDeviceSynchronize，在事件计时路径中由计时器等待 stop 事件完成。这些同步让资源使用、读回结果与测量边界对齐。
+
+### 普通计时的口径
+
+当前计时器执行：预热 → 同步 → 记录 start → 重复调用 → 记录 stop 并等待 → 总时间除以迭代次数。CPU 参考计算、H2D/D2H 拷贝、结果校验和日志均位于事件区间外。[NVIDIA：CUDA 事件](https://docs.nvidia.com/cuda/cuda-runtime-api/cuda_runtime_api/group__CUDART__EVENT.html)
+
+该值表示当前提交方式和执行条件下的事件区间平均耗时；尤其对很短的核函数，CPU 提交造成的 GPU 空闲间隙也可能反映到区间中。它不等于整个程序的端到端耗时。
+
+### profile 的采集范围
+
+仓库 run_ncu.ps1 使用 `--profile-from-start off`，与 cudaProfilerStart / cudaProfilerStop 配合，将预热和前置检查放在采集范围外。范围内提供一次用于采集的逻辑 GEMM 启动；NCU 为收集指标可能重放该核函数。程序中的标记需由外部 profiler 配合才形成采集报告。[NVIDIA：Nsight Compute CLI](https://docs.nvidia.com/nsight-compute/NsightComputeCli/index.html)
+
+## 4.6 吞吐率：明确计算量与时间单位
+
+代码按 GEMM 的常用计数约定使用约 `2×M×N×K` FLOP：一次乘加计两次浮点运算。ms 是平均毫秒数，因此：
+
+```text
+GFLOP/s = FLOP / (ms × 10^-3) / 10^9
+        = FLOP / (ms × 10^6)
+```
+
+这解释了 `flops / (static_cast<double>(ms) * 1e6)` 的单位换算。结果在 after 校验通过、时间有限且为正后才输出。
+
+本节待思考：若把 cudaMemcpy 与 validate 一起移进传给 benchmark 的 lambda，得到的时间还对应现在的工作负载吗？重点说明测量范围，而不是背语法。
+
+# PowerShell 部分
+
+## 1. 先读懂一条实验命令
+
+PowerShell 是解释并执行命令的 shell，也是一门脚本语言。终端是输入命令、显示输出的界面；`.ps1` 文件则保存 PowerShell 代码。
+
+本节先掌握命令调用规则，脚本内部的管道、重定向和参数展开后续再讲。
+
+### 1.1 先区分两层参数
+
+```text
+PowerShell
+    ├─ 直接启动 sgemm.exe → 程序内 parse_options 解释参数
+    └─ 运行 run_benchmark.ps1 → PowerShell 绑定脚本参数
+                                  ↓
+                             脚本逐次启动 sgemm.exe
+```
+
+| 接收者 | 参数示例 | 参数规则来自哪里 |
+| --- | --- | --- |
+| PowerShell 命令，例如 Set-Location | `-Path` | 该命令声明的参数 |
+| PowerShell 脚本 run_benchmark.ps1 | `-Modes`、`-Shapes`、`-CheckOnly` | 脚本开头的 param 声明 |
+| 外部程序 sgemm.exe | `0 127 193 65 --plan` | 程序自己的命令行解析代码 |
+
+单横线和双横线不是统一的功能分类。要先识别接收参数的是谁，再按它的接口填写；不能把脚本的 `-CheckOnly` 直接替换成程序的 `--check-only`，反之亦然。
+
+### 1.2 命令结构：命令名后用空格放参数
+
+```powershell
+.\build\labs\sgemm\Release\sgemm.exe 0 127 193 65 --plan
+```
+
+可以拆成：
+
+| 部分 | 含义 |
+| --- | --- |
+| `.\build\labs\sgemm\Release\sgemm.exe` | 要执行的程序路径 |
+| `0` | 位置参数 mode |
+| `127 193 65` | 依次为 M、N、K |
+| `--plan` | 由 sgemm.exe 解释的选项 |
+
+PowerShell 的常见命令调用形式是 `命令 参数 参数`。需要计算一个参数值时，再用括号明确表达式：
+
+```powershell
+Write-Output 2+3     # 输出文本 2+3
+Write-Output (2+3)   # 输出数值 5
+```
+
+命令参数模式与算术表达式模式有不同规则，不能把 C++ 的函数调用形式直接套在命令上。每行通常是一条命令，不必写分号；`#` 开始行注释。[Microsoft：PowerShell 解析规则](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_parsing?view=powershell-7.6)
+
+### 1.3 路径从哪里开始算
+
+```powershell
+Get-Location
+Set-Location 'D:\CG\Kernel_Optimization\cuda-labs'
+```
+
+Get-Location 查看当前位置；Set-Location 切换目录，常见别名是 cd。
+
+| 路径写法 | 含义 |
+| --- | --- |
+| `.` | 当前目录 |
+| `..` | 上一级目录 |
+| `.\labs\sgemm\...` | 从当前目录往下找 |
+| `D:\CG\Kernel_Optimization\cuda-labs\...` | 绝对路径 |
+
+当前目录取决于终端的位置，不会因为正在编辑某个脚本就自动变成那个脚本所在目录。
+
+PowerShell 通常不会仅因某程序位于当前目录就按裸名称找到它；显式使用 `.\程序名.exe` 或完整路径可以明确执行目标。[Microsoft：命令查找顺序](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_command_precedence?view=powershell-7.6)
+
+### 1.4 命名参数、开关与数组
+
+下面这条命令在仓库根目录运行时，会由脚本自动构建并检查所选配置。本节只分析调用含义，未执行该脚本：
+
+```powershell
+.\labs\sgemm\scripts\run_benchmark.ps1 -Modes 0,2 -Shapes '3x5x7','17x19x23' -Repeat 1 -CheckOnly
+```
+
+| 片段 | 含义 |
+| --- | --- |
+| `-Modes 0,2` | Modes 接收由两个整数组成的数组 |
+| `-Shapes '3x5x7','17x19x23'` | Shapes 接收由两个形状字符串组成的数组 |
+| `-Repeat 1` | 每种配置运行一轮 |
+| `-CheckOnly` | 开启只校验、不计时的开关 |
+
+类型对应脚本开头的 `[int[]]$Modes`、`[string[]]$Shapes`、`[int]$Repeat` 和 `[switch]$CheckOnly`。方括号里的类型决定参数接收什么，`[]` 表示数组。
+
+在这条 PowerShell 脚本调用中，逗号将多个值组成一个数组，交给同一个参数；它不负责分隔不同参数。因此，`-Modes 0,2` 与 `-Modes '0,2'` 含义不同，后者是一个包含逗号的字符串。[Microsoft：命令参数](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_parameters?view=powershell-7.6)
+
+两个 mode 乘两个 shape，构成四种配置，Repeat=1 表示每种配置跑一轮。Repeat 控制脚本轮次；Iterations 控制每个程序进程内普通计时的重复启动次数，CheckOnly 路径不进行普通计时。
+
+逗号的规则还取决于接收者。直接运行原生 exe 时，不能用 `0,2` 要求本项目一次执行两个 mode；脚本正是通过循环逐次启动程序实现这种批量工作。NCU 的 `-Metrics '指标一,指标二'` 则刻意接收一个含逗号的字符串，再由脚本拆分。
+
+### 1.5 单引号、双引号与变量
+
+```powershell
+$taskSize = 128
+'M=$taskSize'     # 输出 M=$taskSize
+"M=$taskSize"     # 输出 M=128
+```
+
+变量名以 `$` 开头。单引号保留文字，双引号会展开变量；不需要变量展开时，固定文本和路径可以使用单引号。PowerShell 的转义字符是反引号，Windows 路径里的反斜杠通常直接写即可。[Microsoft：引号规则](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_quoting_rules?view=powershell-7.6)
+
+引号还能将含空格的内容保持为一个参数，例如：
+
+```powershell
+.\labs\sgemm\scripts\run_benchmark.ps1 -BuildDir 'build debug' -Modes 0 -CheckOnly
+```
+
+这一例中 BuildDir 收到的目录名是完整的 `build debug`。
+
+### 1.6 &：调用由字符串或变量指定的命令
+
+```powershell
+$taskExe = '.\build\labs\sgemm\Release\sgemm.exe'
+& $taskExe 0 127 193 65 --plan
+```
+
+当命令路径存放在变量中，使用调用运算符 `&` 执行它。带引号的路径同理：
+
+```powershell
+& '.\build\labs\sgemm\Release\sgemm.exe' 0 127 193 65 --plan
+```
+
+单独写一个带引号的路径只是产生字符串；`&` 才要求调用该命令。这里的 & 是前缀调用运算符，不是 C++ 的取地址符号。[Microsoft：调用运算符](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_operators?view=powershell-7.6)
+
+命令路径与参数应分开存放，不能期待 `&` 把一个包含整条命令的字符串重新解析成路径和参数。后续脚本中的参数数组正用于清楚地保留各参数边界。
+
+### 1.7 长命令换行：读懂反引号
+
+```powershell
+.\labs\sgemm\scripts\run_benchmark.ps1 `
+    -Modes 0,2 `
+    -Shapes '3x5x7','17x19x23' `
+    -Repeat 1 `
+    -CheckOnly
+```
+
+行末反引号表示命令延续到下一行，整段仍然是一条命令。反引号必须紧贴换行，后面不能再有空格或注释；这里的缩进只帮助阅读。
+
+较长的可复用命令可以用参数展开改善排版，后续再讲。当前先能识别这种续行形式。[Microsoft：续行](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_parsing?view=powershell-7.6)
+
+### 1.8 从哪里查参数
+
+```powershell
+Get-Help .\labs\sgemm\scripts\run_benchmark.ps1 -Parameter *
+.\build\labs\sgemm\Release\sgemm.exe --help
+```
+
+Get-Help 可以查看 PowerShell 脚本声明的参数；sgemm.exe 则使用自身实现的 --help。文档中的 `[mode=0]`、`<参数值>` 等说明性占位符，不需要原样输入终端；代码块的语言标签 powershell 和提示符 `PS D:\...>` 也不属于命令正文。
+
+本节已在 PowerShell 7.6.5 中核对数组参数绑定、单双引号、括号表达式，并实际执行上述 --plan 示例。该计划显示 M=127、N=193、K=65，grid=(13,8)，未启动 GEMM。跑分脚本调用仅用于讲解。
+
+本节待练习：从仓库根目录，写出“只检查 mode 1，形状为 17×19×23，运行一轮”的脚本命令。先写一行，再尝试用反引号拆成多行。
