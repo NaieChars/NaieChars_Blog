@@ -1,6 +1,6 @@
 ---
 title: Softmax Attention CUDA 算子
-published: 2026-11-4
+published: 2026-11-04
 pinned: true
 description: 解析 CUDA 算子
 tags: [CUDA]
