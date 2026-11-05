@@ -147,7 +147,7 @@
 
 /* 代码内容折叠状态 */
 .expressive-code.collapsed .frame pre {
-  max-height: 5rem;
+  max-height: 12.5rem;
   overflow: hidden;
 }
 
@@ -202,7 +202,7 @@
 
   /* 折叠高度微调 */
   .expressive-code.collapsed .frame pre {
-    max-height: 4.5rem;
+    max-height: 12rem;
   }
 
   /* 隐藏语言标签以节省空间 */

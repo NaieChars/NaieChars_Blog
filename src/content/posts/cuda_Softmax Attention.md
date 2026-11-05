@@ -154,3 +154,72 @@ $$
 也就是说，一个权重 $P_{ij}$ 乘的是整个 Value 向量 $V_{j,:}$，其中所有的分量使用同一个权重。
 
 # CUDA 代码实现
+
+## 背景
+
+- `Q` 矩阵大小：$M \times d$，`K` 与 `V` 矩阵大小：$N \times d$
+- $1 \leq$ `M`，`N` $\leq 100,000$
+- $1 \leq$ `d` $\leq 128$
+- 这里先采用 `M` $= 512$，`N` $= 256$
+
+第一个版本先约定：
+```cpp
+constexpr int BLOCK_SIZE = 256;
+constexpr int NUM_WARPS = BLOCK_SIZE / 32;
+```
+
+## 分层归约
+在 Softmax 中，我们需要对每一个 block 求出当前的局部和与局部 max，需要用到分层归约的技巧
+
+首先通过 `__shfl_down_sync` 实现 warp 内线程的互相通信
+```cpp
+template <bool IS_MAX>
+__device__ __forceinline__ float warp_reduce(float value)
+{
+    for (int offset = 16; offset > 0; offset >>= 1)
+    {
+        const float other = __shfl_down_sync(0xffffffffu, value, offset);
+        if (IS_MAX)
+            value = fmaxf(value, other);
+        else
+            value += other;
+    }
+    return value;
+}
+```
+
+`block_reduce` 调用 `warp_reduce`，实现一个 Block 归约的输出
+
+```cpp
+template <bool IS_MAX>
+__device__ __forceinline__ float block_reduce(float value)
+{
+    __shared__ float shared[NUM_WARPS];
+    const int warp_id = threadIdx.x / 32;
+    const int lane = threadIdx.x % 32;
+
+    value = warp_reduce<IS_MAX>(value);
+    if (lane == 0) 
+        shared[warp_id] = value;
+
+    __syncthreads();
+
+    if (warp_id == 0)
+    {
+        const float identity = (IS_MAX) ? -CUDART_INF_F : 0.0f;
+        value = (lane < NUM_WARPS) ? shared[lane] : identity;
+        value = warp_reduce<IS_MAX>(value);
+        
+        if (lane == 0)
+            shared[0] = value;
+    }
+    __syncthreads();
+
+    value = shared[0];
+
+    __syncthreads();
+    return value;
+}
+```
+
+## 核心 Kernel
