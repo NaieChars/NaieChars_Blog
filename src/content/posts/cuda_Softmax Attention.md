@@ -115,7 +115,7 @@ S_{ij}
 \sum_{r=0}^{d-1}Q_{ir}K_{jr}
 
 $$
-$S_{ij}$ 越大，表示按照这里的点积评分方式，Query $i$ 与 key $j$ 越匹配。一行 $S_{i,:}$ 就是一个 Query 对全部 $N$ 个 Key 的评分
+$S_{ij}$ 越大，表示按照这里的点积评分方式，Query $i$ 与 key $j$ 越匹配。**一行 $S_{i,:}$ 就是一个 Query 对全部 $N$ 个 Key 的评分**
 
 除以 $\sqrt d$ 是为了控制分数的尺度：在常见的统计假设下，点积的方差随 $d$ 增大，缩放可以避免 Softmax 过于尖锐。
 
@@ -223,3 +223,61 @@ __device__ __forceinline__ float block_reduce(float value)
 ```
 
 ## 核心 Kernel
+### K 访存优化：一个 warp 负责一个 Key 评分
+先计算评分，也就是 $P_{ij} = Q_i \times K_j^T$，即评分矩阵 i, j 的位置表示第 i 个输入向量对第 j 个 Key 打的分数（匹配程度）
+
+很容易想到的一个计算代码，一个线程负责一个 Key 向量的评分：
+
+```cpp
+const int tid = threadIdx.x;
+const int row = blockIdx.x;
+
+if (row >= M) return;
+
+// compute score
+// 每一个线程计算一个 Q-K 评分，无效线程后续仍然参与归约
+float score = -CUDART_INF_F;
+if (tid < N)
+{
+    float dot = 0.0f;
+    for (int e = 0; e < d; ++e)
+    {
+        dot += Q[row * d + e] * K[tid * d + e];
+    }
+
+    score = dot * rsqrtf(static_cast<float>(d));
+}
+```
+上述代码出现了一个经典的性能优化问题——访存未合并，相邻两个线程同时在处理某个 `e` 时，从显存拿 K 的值并不是合并访存，中间相差了 d 个元素。当然这种情况下，GPU 可能会把相关的扇区放在 L1 L2 中，真实的性能损耗得看 L1 L2 命中率。
+
+针对上面的情况，可以**考虑一个 warp 负责一个 Key 向量的评分**，`lane = 0, 1...31` 读取 $K$ 同一行的相邻分量（即第 $j$ 个 Key）。所以，固定 Query $i$ 和 Key $j$ 后，点积沿特征下标 $e$ 展开。$e$ 从 0 增到 d-1 时，`K[j * d + e]` 正好沿着原始 $K$ 的第 $j$ 行连续读取。
+
+拿 $d=128$ 举例，一个 warp 的 32 个 lane 可以分四轮计算同一个点积：
+
+| lane | 负责的特征下标 \\(e\\) |
+| --- | --- |
+| 0 | 0、32、64、96 |
+| 1 | 1、33、65、97 |
+| … | … |
+| 31 | 31、63、95、127 |
+
+第一轮，32 个 lane 同时读 `K[j*d+0]` 到 `K[j*d+31]`，各自乘上 Q 的对应分量。四轮后，每个 lane 手里有 4 项乘积的局部和。把这 32 个局部和传给写好的 `warp_reduce<false>`，lane 0 就会得到完整点积，并写下评分。同时，**一个 warp 可以负责多个 Key 的评分**，一共 N 个 Key，仍然是一个 block 负责一个 Query。
+
+```cpp
+for (int j = warp_id; j < N; j += NUM_WARPS)
+{
+    float partial = 0.0f;
+    for (int e = 0; e < d; e += 32)
+    {
+        partial += Q[row * d + e] * K[j * d + e];
+    }
+    
+    const float dot = warp_reduce<false>(partial);
+    if (lane == 0)
+        weights[j] = dot * rsqrtf(static_cast<float>(d));  // 这个阶段暂存评分
+}
+
+// Softmax 阶段重新分工，每个线程接手一个评分
+const float score = (tid < N) ? weights[tid] : -CUDART_INF_F;
+```
+
