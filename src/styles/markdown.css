@@ -1,5 +1,9 @@
 @reference "tailwindcss";
 
+#post-container .custom-md :is(h1, h2, h3, h4, h5, h6) {
+  color: #73b7f1;
+}
+
 .custom-md {
   h1 {
     @apply text-3xl;
