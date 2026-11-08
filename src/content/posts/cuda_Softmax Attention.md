@@ -281,3 +281,17 @@ for (int j = warp_id; j < N; j += NUM_WARPS)
 const float score = (tid < N) ? weights[tid] : -CUDART_INF_F;
 ```
 
+### Online Softmax 优化
+普通稳定性 Softmax（Safe Softmax）很直观，先找全局最大值，再统一计算。通过减去全局最大值 m 来防止指数溢出。
+
+**Online Softmax** 的精妙之处在于，它**不等待看到全局最大值**，而是维护一套“当前最优”的状态，并**在遇到新数据时进行一致性修正**。
+
+固定一个 Query，设它对各个 Key 的评分是 $s_j$，输出向量可以写成:
+
+$$
+\mathbf o
+=\sum_j \frac{e^{s_j-m}}{\sum_k e^{s_k-m}}\mathbf v_j
+=\frac{\underbrace{\sum_j e^{s_j-m}\mathbf v_j}_{\text{加权和 }\mathbf a}}
+       {\underbrace{\sum_j e^{s_j-m}}_{\text{指数和 }\ell}}.
+$$
+
