@@ -1015,7 +1015,7 @@ LALR(1) 是 LR(1) 的实用折中：将 LR(1) 项目集中“同心”的状态�
 下面用一个例子来说明继承属性
 
 <p align="center">
-  <img src="/markdown_picture/编译原理/11.png" width="500">
+  <img src="/markdown_picture/编译原理/11.png" width="400">
 </p>
 
 | 产生式 | 语义规则 | 在做什么 |
@@ -1075,14 +1075,14 @@ T -> num       T.nptr := mdleaf(num, num.entry)
 **语法分析树：根是 E**
 
 <p align="center">
-  <img src="/markdown_picture/编译原理/12.png" width="500">
+  <img src="/markdown_picture/编译原理/12.png" width="400">
 </p>
 
 两个 `E₁` 分别是各自产生式里的左操作数。左下角的 `a` 经过` E → T → id`，而 `4` 和 `c` 本来就在 `T` 的位置，可以直接用 `T → num` 和 `T → id`。
 
 **抽象语法树（AST）：根是 +**
 <p align="center">
-  <img src="/markdown_picture/编译原理/13.png" width="500">
+  <img src="/markdown_picture/编译原理/13.png" width="300">
 </p>
 
 `mkleaf` 建出 `a`、`4`、`c` 三个叶子
@@ -1151,8 +1151,7 @@ T -> num       T.nptr := mdleaf(num, num.entry)
 
 所以对于后缀式的计算（从左往右扫描）**只用一个栈就可以实现**，每碰到操作数就进栈，每碰到 k 目运算符就把它作用于栈顶的 k 个项，并用运算结果代替这 k 个项。
 
-#### 将表达式翻译成后缀式的属性文法
-> 这三点对应的就是前面后缀式的定义
+#### 将产生式翻译成后缀式的属性文法
 
 ```go
 // 产生式                    语义规则
@@ -1164,6 +1163,8 @@ E -> id          E.code := id
 - **`E.code` 表示 E 后缀形式**
 - `op` 表示任意二元操作符
 - **`||` 表示后缀形式的连接**
+
+右边的语义规则是事先写好的，编译器按规则计算对应的 `E.code`，得到的结果就对应产生式的后缀式
 
 ### 4.1.2 图表示
 #### 抽象语法树（AST）
@@ -1323,16 +1324,32 @@ Y := D @ (A + B)
 | 产生式 | `E → E₁ + T`。整个表达式由左边的 `a-4`、中间的 `+`、右边的 `c` 组成。 |
 | 属性 | `E.nptr`。它保存整个表达式对应的 AST 根节点指针。`E₁.nptr` 和 `T.nptr` 分别指向左右子树。 |
 | 语义规则 | `E.nptr := mknode('+', E₁.nptr, T.nptr)`。用左右子树建一个 `+` 节点，把新节点的指针存入 `E.nptr`。 |
-| 属性文法 | 把整套产生式、各符号的属性、附在各条产生式上的语义规则放在一起。上面只是其中一条。 |
 
-#### 翻译模式把动作放到具体的执行位置
-把上面那条规则写成翻译模式，可以写成这样：
+#### 属性文法
+属性文法把整套产生式、各符号的属性、附在各条产生式上的语义规则放在一起
 
 ```go
 E → E₁ + T  { E.nptr := mknode('+', E₁.nptr, T.nptr) }
 ```
 
-花括号里的是**语义动作**。在我们 PPT 的自下而上分析中，当栈顶的 `E₁ + T` 按这条产生式归约成 `E` 时，就执行这个动作。它从栈里取出 `a-4` 和 `c` 的子树指针，建好 `+` 节点，再把结果指针存到新 E 的属性槽里
+#### 翻译模式
+翻译模式**把动作放到具体的执行位置**
+
+把上面的例子写成翻译模式，写成这样，跟属性文法几乎一模一样：
+
+```go
+E → E₁ + T  { E.nptr := mknode('+', E₁.nptr, T.nptr) }
+```
+
+但是我们可以看前面**更加典型的一个例子**，对于源语句 `real id1, id2, id3`，他的翻译模式长这样：
+
+```go
+D → T { L.in := T.type } L
+```
+
+这条翻译模式**明确规定了执行顺序**：先处理 `T`，把 `real` 传给 `L.in`，再处理 `L`。如果写成属性文法，就是给 `D → T L` 附上 `L.in := T.type`，表达 `L.in` 依赖 `T.type`。
+
+花括号里的是**语义规则**。在我们 PPT 的自下而上分析中，当栈顶的 `E₁ + T` 按这条产生式归约成 `E` 时，就执行这个动作。它从栈里取出 `a-4` 和 `c` 的子树指针，建好 `+` 节点，再把结果指针存到新 E 的属性槽里
 
 所以，**属性文法写清楚怎么算，翻译模式还写清楚在分析到哪里时执行**
 
@@ -1357,38 +1374,188 @@ TOP = ntop                                  // 最后更新栈顶
 ```
 
 ### 4.2.1 赋值语句生成三地址代码的 S-属性文法
+**语义规则**（编译根据下面这些语义规则来生成三地址语句）：
 - **`place`（综合属性）**：表示“这个表达式算出来的结果，存放在哪里”。
 - **`code`（综合属性）**：表示“为了算出这个表达式，需要执行的三地址代码序列”。它相当于一份待办清单。
-- `newtemp()`：申请一个新的临时变量，用来存放中间计算结果。
-- `gen(...)`：把括号里的内容拼成一条具体的**三地址代码指令**（比如 `T1 := a + b`）。
+- `newtemp()`：**编译时设置属性**，申请一个新的临时变量，用来存放中间计算结果。
+- `gen(...)`：**编译时生成指令**，把括号里的内容拼成一条具体的**三地址代码指令**（比如 `T1 := a + b`）。
+
+> **编译器按匹配到的产生式执行预先写好的语义规则，生成三地址语句**
 
 下面看一个具体的**赋值语句** `x := a + b` 的三地址代码生成例子：
 
-**编译器会生成两条三地址语句**：
+该赋值语句（源语句）对应**产生式** $S \to \text{id} := \text{E}$。此时编译器会**生成两条三地址语句**：
 
 ```go
 T1 := a + b
 x := T1
 ```
 
-假设 `x` 已经声明，编译器在符号表里为他创建了一个条目。
-1. **确定 `x.place`**。编译器看到左边 `x` 查符号表找到 `x` 的条目，确定 `x.place`
+假设 `x` 已经声明，编译器**已经**在符号表里为他创建了一个条目。
+1. **确定 `x.place`**。编译器看到 `x` 查符号表找到 `x` 的条目，确定 `x.place`
 2. **确定 `E.place`**：编译器为右边的 `a + b` 申请了一个临时变量 `T1`，设置 `E.place = T1`，生成 `T1 := a + b`
 3. **生成赋值指令**。用 `x.place` 找到目的地 `x`，用 `E.place` 找到来源 `T1`，生成 `x := T1`。程序运行时，如果 `T1` 里存的是 `5`，这条指令就把 `5` 写进 `x`。
 
-这里要区分一下：
+#### 赋值语句的属性文法见下
 
+> 以下的语义规则记住两点即可：`E.code` 是求出这个表达式的三地址代码；`E.place` 是这段代码执行完成后，结果所在位置
+
+1. **变量和括号**：沿用已有的位置
 ```go
-E.place := newtemp()
-gen(id.place ':=' E.place)
+E -> id    E.place := id.place
+           E.code  := 
+E -> (E1)  E.place := E1.place
+           E.code  := E1.code
 ```
 
-- 前者 `newtemp()`：**是编译时设置属性**。为表达式 `a + b` 选一个临时变量名 `T`，存在 `E.place`
-- 后者 `gen(...)`：**是编译时生成指令**。用 `id.place` 找到目的变量 `x`，用 `E.place` 找到来源 `T1`，生成 `x := T1`。程序运行时，这条指令才把 `T1` 的值写进 `x`
+2. 加法、乘法和取负：生成一条新指令
 
-E.place := E1.place：意思是“我的结果存在哪，取决于我子节点的结果存在哪”（透明传递）。
+```go
+E -> E1 + E2    E.place := newtemp()
+                E.code  := E1.code || E2.code || gen(E.place ':=' E1.place '+' E2.place)
+```
+第二行从左往右读，**先算左操作数，再算右操作数，最后用它们的结果做加法**
+
+3. 赋值
+
+```go
+S -> id := E    S.code := E.code || gen(id.place ':=' E.place)
+```
+
+#### 赋值语句的翻译模式
+
+`emit()` 是编译器的一个辅助函数，意思是把一条三地址语句追加到中间代码里，与 `gen()` 不同，`gen()` 是构造一条指令，供 `E.code` 或 `S.code` 拼接，`emit()` 则把这条指令**直接输出**。 
+
+1. 处理加法时，先输出一条指令
+
+例如对于源语句 `x := a + b`
+
+```go
+E -> E1 + E2    { E.place := newtemp();
+                  emit(E.place ':=' E1.place '+' E2.place) }
+```
+
+第二行把 `T1 := a + b` 直接追加到中间代码输出
+
+2. 赋值语句
+
+```go
+S -> id := E    { p := lookup(id.name);
+                  if p != nil then emit(p ':=' E.place)
+                      else error }
+```
+
+> 你可以注意到，在翻译模式里我们省略了 `.code`，这是因为指令已经通过 `emit()` 输出了，因此可以省略。
+
+#### 带数组元素的赋值语句的翻译模式
+
+```go
+S -> L := E    { E.place := newtemp();
+                 if L.offset = null then /* L 是普通变量 */
+                     emit(L.place := E.place)
+                 else emit(L.place '[' L.offset ']' ':=' E.place) }
+               
+                 
+E -> L         { if L.offset = null then /* L 是简单变量 */
+                     emit(E.place := L.place)
+                 else begin
+                     E.place = newtemp();
+                     emit(E.place ':=' L.place '[' L.offset ']')
+                 end }
+```
+
+- `L.offset = null` 说明左边是普通变量，直接用地址
+- `L.offset != null` 说明左边是数组元素。
+- `L.place '[' L.offset ']'` 可以理解为**数组基址 + 偏移量**
+
+```go
+Elist -> id [ E    { Elist.place := E.place;
+                     Elist.ndim  := 1
+                     Elist.array := id.place }
+                     
+
+L -> Elist ]       { L.place := newtemp();
+                     emit(L.place ':=' Elist.array '-' C);
+                     L.offset := newtemp();
+                     emit(L.offset ':=' w '*' Elist.place) }
+```
+
+以上两条产生式来自于源码 `A[i] := x`，第一条处理 `A[i`，记下数组和下标，第二条读到 `]`，生成计算地址的代码，把整个 `A[i]` 归约成 `L`，有了这个 `L`，我们便可以把刚刚提到的 `S -> L := E` 联系起来，这时候才知道把 `x` 的值写进哪里
+
+| 语义动作 | 套到 A[i 上是什么意思 |
+| --- | --- |
+| `Elist.place := E.place` | 记下「下标值在哪里」。这里下标就是 `i`，所以记的是变量 `i` 的位置。 |
+| `Elist.ndim := 1` | 目前处理了 1 个下标。如果后面还有 , `j`，再用 `Elist → Elist`（下面马上提到）, `E` 接着处理。 |
+| `Elist.array := id.place` | 记下「这是哪个数组」。这里保存的是数组 `A` 的符号表条目引用，后面可以用它找到数组的基址等信息。 |
+
+假设 `A` 的第一个元素 `A[1]` 的地址是 `100`，每个元素占 `4` 字节。那么：
+
+$$
+\operatorname{addr}(A[i])=100+(i-1)\times4
+=\underbrace{(100-4)}_{\text{固定部分}}+\underbrace{4i}_{\text{随下标变化的部分}}
+$$
+
+在上面的代码里，我们用 `w` 表示元素宽度，这里是 `4`，`C` 来表示由下界带来的修正量，这里是 `1×4=4`
+
+| 语义动作 | 套到 A[i] 上是什么意思 |
+| --- | --- |
+| `L.place := newtemp()` | 申请临时变量名 `T1`，记在 `L.place` 里 |
+| `emit(L.place ':=' Elist.array '-' C`) | 用数组 `A` 的基址生成` T1 := base(A) - 4`，对应公式中的**固定部分** |
+| `L.offset := newtemp()` | 申请临时变量名 `T2`，记在 `L.offset` 里 |
+| `emit(L.offset ':=' w '*' Elist.place)` | 用下标的位置生成 `T2 := 4 * i` |
+
+**如果是多维数组**，比如 `A[i, j]`，对应的**产生式有三条**，下面介绍多加的那一条的语义规则：
+
+```go
+Elist -> Elist1, E    { t := newtemp();
+                        m := Elist1.ndim + 1;
+                        emit(t ':=' Elist1.place '*' limit(Elist1.array, m));
+                        emit(t ':=' t '+' E.place);
+                        Elist.place := t;
+                        Elist.ndim  := m;
+                        Elist.array := Elist1.array; }
+```
+
+
+
+#### 类型转换
 
 ### 4.2.2 布尔表达式
-逻辑运算符的优先级：not > and > or  
+**逻辑运算符的优先级：not > and > or**  
+
+#### 数值表示法
+跟计算离散数学一样的方法进行计算
+
+`A or B and C > D` 可以翻译成三地址语句：
+
+```go
+T1 := C > D
+T2 := B and T1
+T3 := A or T2
+```
+
+`a < b` 也可等价写成 `if a < b then 1 else 0`，翻译成：
+
+```go
+0    if a < b goto 3
+1    T := 0
+2    goto 4
+3    T := 1
+4
+```
+
+**对应的翻译模式见下**：
+
+```go
+E -> E1 or E2   { E.place := newtemp();
+                  emit(E.place ':=' E1.place 'or' E2.place) }
+E -> E1 and E2  { E.place := newtemp();
+                  emit(E.place ':=' E1.place 'and' E2.place) }
+E -> not E1     { E.place := newtemp();
+                  emit(E.place ':=' 'not' E1.place) }
+E -> (E1)       { E.place := E1.place }
+```
+
+
 
 ### 4.2.3 条件语句的翻译
