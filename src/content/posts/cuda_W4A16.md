@@ -292,17 +292,31 @@ __global__ void w4a16_kernel(
 }
 ```
 
-看具体的 ncu 性能指标：
+还可以进一步在外层循环中让第一个线程读取，其他线程**通过 warp 内广播**来获取相同参数
+
+```cpp
+float scale, zero;
+if (lane == 0)
+{
+    scale = __half2float(scales[global_group_idx]);
+    zero = __half2float(zeros[global_group_idx]);
+}
+zero = __shfl_down_sync(0xffffffffu, zero, 0);
+scale = __shfl_down_sync(0xffffffffu, scale, 0);
+```
+
+
+先具体的 ncu 性能指标：
 
 > 本次性能测试新加了 Section: Compute Workload Analysis 与 Section: Instruction Statistics，方便与后续的版本分析对比
+
+> 第一项为无广播版本的指标
 
 ```
     Section: GPU Speed Of Light Throughput
     ----------------------- ----------- ------------
     Metric Name             Metric Unit Metric Value
     ----------------------- ----------- ------------
-    DRAM Frequency                  Ghz        10.99
-    SM Frequency                    Ghz         1.29
     Elapsed Cycles                cycle      141,435
     Memory Throughput                 %        58.94
     DRAM Throughput                   %        27.95
@@ -351,11 +365,6 @@ __global__ void w4a16_kernel(
     ------------------------------- ----------- ------------
     Metric Name                     Metric Unit Metric Value
     ------------------------------- ----------- ------------
-    Block Limit Barriers                  block           24
-    Block Limit SM                        block           24
-    Block Limit Registers                 block            6
-    Block Limit Shared Mem                block           16
-    Block Limit Warps                     block            6
     Theoretical Active Warps per SM        warp           48
     Theoretical Occupancy                     %          100
     Achieved Occupancy                        %        85.70
@@ -363,3 +372,269 @@ __global__ void w4a16_kernel(
     ------------------------------- ----------- ------------
 ```
 
+> 第二项为有广播版本的指标
+
+```
+    Section: GPU Speed Of Light Throughput
+    ----------------------- ----------- ------------
+    Metric Name             Metric Unit Metric Value
+    ----------------------- ----------- ------------
+    Elapsed Cycles                cycle      150,604
+    Memory Throughput                 %        68.90
+    DRAM Throughput                   %        21.69
+    Duration                         us       117.09
+    L1/TEX Cache Throughput           %        71.20
+    L2 Cache Throughput               %         9.99
+    SM Active Cycles              cycle   144,713.19
+    Compute (SM) Throughput           %        68.90
+    ----------------------- ----------- ------------
+    
+    Section: Compute Workload Analysis
+    -------------------- ----------- ------------
+    Metric Name          Metric Unit Metric Value
+    -------------------- ----------- ------------
+    Executed Ipc Active   inst/cycle         2.79
+    Executed Ipc Elapsed  inst/cycle         2.70
+    Issue Slots Busy               %        69.86
+    Issued Ipc Active     inst/cycle         2.79
+    SM Busy                        %        69.86
+    -------------------- ----------- ------------
+
+    Section: Memory Workload Analysis
+    -------------------- ----------- ------------
+    Metric Name          Metric Unit Metric Value
+    -------------------- ----------- ------------
+    Memory Throughput        Gbyte/s        76.25
+    Mem Busy                       %        34.50
+    Max Bandwidth                  %        68.90
+    L1/TEX Hit Rate                %        88.97
+    L2 Compression Ratio                        0
+    L2 Hit Rate                    %         4.96
+    Mem Pipes Busy                 %        68.90
+    -------------------- ----------- ------------
+
+    Section: Instruction Statistics
+    ---------------------------------------- ----------- ------------
+    Metric Name                              Metric Unit Metric Value
+    ---------------------------------------- ----------- ------------
+    Avg. Executed Instructions Per Scheduler        inst   101,100.31
+    Executed Instructions                           inst   10,514,432
+    Avg. Issued Instructions Per Scheduler          inst   101,100.31
+    Issued Instructions                             inst   10,514,432
+    ---------------------------------------- ----------- ------------
+
+    Section: Occupancy
+    ------------------------------- ----------- ------------
+    Metric Name                     Metric Unit Metric Value
+    ------------------------------- ----------- ------------
+    Theoretical Active Warps per SM        warp           48
+    Theoretical Occupancy                     %          100
+    Achieved Occupancy                        %        85.77
+    Achieved Active Warps Per SM           warp        41.17
+    ------------------------------- ----------- ------------
+```
+
+可以看到，有广播的版本反而比无广播版本的耗时更多。具体原因可以从指令看出：
+- 前者 warp 调度器发射的 warp 级指令总数为 **Issued Instructions 9,596,928**；后者的该项值为 **Issued Instructions 10,514,432**
+
+指令数量变多主要来自于几个方面，这里将从 SSAS 分析具体每一条相关汇编指令执行了多少次：
+
+> 可以用 ncu 测量每一条 SSAS 实际执行了几次
+
+- 广播版本新增了如下指令：（后者是动态 warp 执行次数）
+  - `SHFL.IDX` 广播指令：262,144
+  - `ISETP.NE.AND` 生成谓词分支：131,072
+  - `BRA` 条件跳转：131,072
+  - `BSSY.RECONVERGENT`：设定重汇合位置：131,072
+  - `BSYNC.RECONVERGENT`：执行重汇合：262,144
+
+上述新增指令累计 917,504，正好是多出来的指令数。
+
+多出来的指令数抵消掉了 warp 内广播所带来的收益（查资料可得，`SHFL` 约 29 个周期，L1 命中加载约 44 个周期，两者的延迟不同），并且相邻线程命中的是同一个 sector。因此后续的版本继续是以非广播为基线优化
+
+# 向量加载
+为了进一步减少指令数以及访存压力，可以采取向量加载。本次版本选择 `W-q` 用 `uint32_t` 加载，`x` 用 `uint4` 加载。
+
+在开始优化前，建议先查看上一个版本的 SSAS 指令，因为很多情况下，编译器会自动发射宽加载指令。
+
+```
+LDG.E.U16 R29, desc[UR8][R8.64]
+LDG.E.U16 R27, desc[UR8][R8.64+0x2]  
+```
+
+以上是编译器生成的加载连续两个相邻 `x` 的指令，可以看到这里编译器并没有优化为宽加载。
+
+值得注意的是，向量加载通常要求严格的**地址对齐**，在本次例子中，`x` 需要 16 字节对齐，`w_q` 需要 4 字节对齐。否则要单独处理跨扇区访问。
+
+优化代码如下：
+
+```cpp
+__global__ void w4a16_kernel(
+    const __half* x,
+    const uint8_t* w_q,
+    const __half* scales,
+    const __half* zeros,
+    __half* y,
+    int64_t N, int K, int G)
+{
+    const int tid = threadIdx.x + blockIdx.x * blockDim.x;
+    const int wq_cols = K / 2;
+    const int groups_per_row = K / G;
+    const int bytes_per_group = G / 2;
+    const int lane = threadIdx.x & 31u;
+    const int warp_idx = threadIdx.x >> 5;
+    const int64_t global_warp_idx = tid >> 5;
+    
+    if (global_warp_idx >= N) return;
+    
+    const int64_t wq_row_begin = global_warp_idx * wq_cols;
+    const int64_t group_row_begin = glabal_warp_idx + groups_per_row;
+    const int lane_in_group = lane % 16;
+    float acc = 0.0f;
+    
+    for (int g = lane >> 4; g < groups_per_rows; g += 20)
+    {
+        const int64_t group_id = group_row + g;
+        const float scale = __half2float(scales[group_id]);
+        const float zero = __half2float(zeros[group_id]);
+        
+        const int b = g * bytes_per_group + lane_in_group * 4; // b: 第一个打包权重字节的下标
+        const uint32_t w_packed = *reinterpret_cast<const uint32_t*>(w_q + wq_row_begin + b);
+        const uint4 x_packed = *reinterpret_cast<const uint4*>(x + 2 * b);
+        const uint32_t w_word[4] = {x_packed.x, x_packed.y, x_packed.z, x_packed.w};
+        
+        #pragma unroll
+        for (int i = 0; i < 4; i++)
+        {
+            const uint32_t packed = w_packed >> (i * 8);
+            const int q0 = packed & 0xfu;
+            const int q1 = (packed >> 4) & 0xFu;
+            
+            const float w0 = (q0 - zero) * scale;
+            const float w1 = (q1 - zero) * scale;
+            
+            const uint32_t x_bits = x_words[i];
+            const __half x0 = __ushort_as_half(static_cast<uint16_t>(x_bits));
+            const __half x1 = __ushort_as_half(static_cast<uint16_t>(x_bits >> 16));
+            
+            acc += w0 * __half2float(x0);
+            acc += w1 * __half2float(x1);
+        }
+    }
+    
+    for (int offset = 16; offset > 0; offset >>= 1)
+    {
+        acc += __shfl_down_sync(0xffffffffu, acc, offset);
+    }
+    
+    if (lane == 0)
+        y[global_warp_idx] = __float2half_rn(acc);
+}
+```
+
+以下是当前版本的 ncu 指标：
+
+```
+    Section: GPU Speed Of Light Throughput
+    ----------------------- ----------- ------------
+    Metric Name             Metric Unit Metric Value
+    ----------------------- ----------- ------------
+    Elapsed Cycles                cycle       66,449
+    Memory Throughput                 %        46.78
+    DRAM Throughput                   %        46.78
+    Duration                         us        54.46
+    L1/TEX Cache Throughput           %        36.25
+    L2 Cache Throughput               %        11.84
+    SM Active Cycles              cycle    61,716.81
+    Compute (SM) Throughput           %        75.26
+    ----------------------- ----------- ------------
+
+    Section: Compute Workload Analysis
+    -------------------- ----------- ------------
+    Metric Name          Metric Unit Metric Value
+    -------------------- ----------- ------------
+    Executed Ipc Active   inst/cycle         3.23
+    Executed Ipc Elapsed  inst/cycle         3.01
+    Issue Slots Busy               %        80.79
+    Issued Ipc Active     inst/cycle         3.23
+    SM Busy                        %        80.79
+    -------------------- ----------- ------------                                             
+
+    Section: Memory Workload Analysis
+    -------------------- ----------- ------------
+    Metric Name          Metric Unit Metric Value
+    -------------------- ----------- ------------
+    Memory Throughput        Gbyte/s       164.38
+    Mem Busy                       %        28.40
+    Max Bandwidth                  %        46.78
+    L1/TEX Hit Rate                %        80.24
+    L2 Compression Ratio                        0
+    L2 Hit Rate                    %         3.75
+    Mem Pipes Busy                 %        33.77
+    -------------------- ----------- ------------
+
+    Section: Instruction Statistics
+    ---------------------------------------- ----------- ------------
+    Metric Name                              Metric Unit Metric Value
+    ---------------------------------------- ----------- ------------
+    Avg. Executed Instructions Per Scheduler        inst    49,860.92
+    Executed Instructions                           inst    5,185,536
+    Avg. Issued Instructions Per Scheduler          inst    49,860.92
+    Issued Instructions                             inst    5,185,536
+    ---------------------------------------- ----------- ------------
+
+    Section: Occupancy
+    ------------------------------- ----------- ------------
+    Metric Name                     Metric Unit Metric Value
+    ------------------------------- ----------- ------------
+    Theoretical Active Warps per SM        warp           48
+    Theoretical Occupancy                     %          100
+    Achieved Occupancy                        %        85.95
+    Achieved Active Warps Per SM           warp        41.26
+    ------------------------------- ----------- ------------
+```
+
+- 首先关注 **Memory Throughput** 与 **Compute (SM) Throughput**，这次向量加载明显降低了访存的压力，导致该 kernel 的**瓶颈转移到了计算上**
+- 向量加载最直接的影响是 **Issued Instructions 5,185,536**，比前版本少了将近一半的指令数，这部分指令数主要来自于访问 glabal memory
+- 详细分析计算瓶颈：SM 吞吐量的总汇总值为 74.99%，展开相关子指标，整理如下：
+
+```
+--------------- ----------- ---------------
+Metric Name     Metric Unit    Metric Value
+--------------- ----------- ---------------
+Issue Active              %           75.09
+Inst Executed             %           75.09
+ALUHeavy                  %           57.48
+FMAHeavy                  %           50.69
+LSU                       %           33.69
+```
+
+```
+-----------------------------------------------------------------------  -----------  ------------
+Metric Name                                                              Metric Unit  Metric Value
+-----------------------------------------------------------------------  -----------  ------------
+smsp__warps_active.avg.peak_sustained                                      warp                12
+smsp__warps_active.avg.per_cycle_active                                    warp             10.14
+smsp__warps_eligible.avg.per_cycle_active                                  warp              4.63
+smsp__issue_active.avg.per_cycle_active                                   warp/cycle         0.80
+smsp__issue_active.avg.pct_of_peak_sustained_active                         %                79.56
+smsp__issue_inst0.avg.pct_of_peak_sustained_active                          %                20.44
+
+smsp__warp_issue_stalled_not_selected_per_warp_active.pct                  %                38.04
+smsp__warp_issue_stalled_long_scoreboard_per_warp_active.pct               %                22.63
+smsp__warp_issue_stalled_math_pipe_throttle_per_warp_active.pct            %                15.87
+smsp__warp_issue_stalled_wait_per_warp_active.pct                          %                 7.12
+smsp__warp_issue_stalled_short_scoreboard_per_warp_active.pct              %                 1.34
+-----------------------------------------------------------------------  -----------  ------------
+```
+
+**Issue Active / Inst Executed 75.09%** 整个 **SM 的指令发射与执行是比较繁忙的**，平均每一个调度器有 10.14 个驻留 warp，4.63 个就绪 warp，每周期约发射 0.8 条指令。`smsp__issue_inst0.avg.pct_of_peak_sustained_active 20.44%` 表示约有 1/5 的周期没有就绪 warp，`smsp__warp_issue_stalled_not_selected_per_warp_active.pct 38.04%` 表示同时有多个 warp 就绪。这表明**就绪的 warp 在时间上分布不均匀**。
+
+后续通过 ncu Source 可以定位指标对应的具体的 SSAS 指令，warp 未准备就绪的指令出自于这里：**压缩权重加载到首次解包之间**
+
+```
+0xb40  LDG.E     R16, ...            // 加载压缩权重
+0xc90  LOP3.LUT  R32, R16, 0xf, ...  // 等 R16 就绪，取低 4 位
+```
+
+所以总的来说，当前版本的主要问题在于：一方面要发射大量解包、转换和反量化指令，另一方面在部分周期等压缩权重就绪。
