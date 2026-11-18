@@ -1,5 +1,5 @@
 ---
-title: CUDA SSAS 分析GPU机器码
+title: CUDA SASS 分析GPU机器码
 published: 2026-10-12
 pinned: true
 description: 通过 NVIDIA 反汇编工具 cuobjdump 分析设备端核函数指令构成，为性能分析提供证据

@@ -437,9 +437,9 @@ scale = __shfl_down_sync(0xffffffffu, scale, 0);
 可以看到，有广播的版本反而比无广播版本的耗时更多。具体原因可以从指令看出：
 - 前者 warp 调度器发射的 warp 级指令总数为 **Issued Instructions 9,596,928**；后者的该项值为 **Issued Instructions 10,514,432**
 
-指令数量变多主要来自于几个方面，这里将从 SSAS 分析具体每一条相关汇编指令执行了多少次：
+指令数量变多主要来自于几个方面，这里将从 SASS 分析具体每一条相关汇编指令执行了多少次：
 
-> 可以用 ncu 测量每一条 SSAS 实际执行了几次
+> 可以用 ncu 测量每一条 SASS 实际执行了几次
 
 - 广播版本新增了如下指令：（后者是动态 warp 执行次数）
   - `SHFL.IDX` 广播指令：262,144
@@ -455,7 +455,7 @@ scale = __shfl_down_sync(0xffffffffu, scale, 0);
 # 向量加载
 为了进一步减少指令数以及访存压力，可以采取向量加载。本次版本选择 `W-q` 用 `uint32_t` 加载，`x` 用 `uint4` 加载。
 
-在开始优化前，建议先查看上一个版本的 SSAS 指令，因为很多情况下，编译器会自动发射宽加载指令。
+在开始优化前，建议先查看上一个版本的 SASS 指令，因为很多情况下，编译器会自动发射宽加载指令。
 
 ```
 LDG.E.U16 R29, desc[UR8][R8.64]
@@ -630,11 +630,63 @@ smsp__warp_issue_stalled_short_scoreboard_per_warp_active.pct              %    
 
 **Issue Active / Inst Executed 75.09%** 整个 **SM 的指令发射与执行是比较繁忙的**，平均每一个调度器有 10.14 个驻留 warp，4.63 个就绪 warp，每周期约发射 0.8 条指令。`smsp__issue_inst0.avg.pct_of_peak_sustained_active 20.44%` 表示约有 1/5 的周期没有就绪 warp，`smsp__warp_issue_stalled_not_selected_per_warp_active.pct 38.04%` 表示同时有多个 warp 就绪。这表明**就绪的 warp 在时间上分布不均匀**。
 
-后续通过 ncu Source 可以定位指标对应的具体的 SSAS 指令，warp 未准备就绪的指令出自于这里：**压缩权重加载到首次解包之间**
+后续通过 ncu Source 可以定位指标对应的具体的 SASS 指令，warp 未准备就绪的指令出自于这里：**压缩权重加载到首次解包之间**
 
-```
 0xb40  LDG.E     R16, ...            // 加载压缩权重
 0xc90  LOP3.LUT  R32, R16, 0xf, ...  // 等 R16 就绪，取低 4 位
+
+所以总的来说，当前版本的主要问题在于：一方面要发射大量解包、转换和反量化指令，另一方面在部分周期等压缩权重就绪。优化策略是，可以提前进行加载指令的发射。
+
+# inline PTX
+进一步优化可以采取 PTX 虚拟指令：
+- 将解包过程转换成 PTX
+- 将小分支转换成 PTX
+
+对于小分支，例如 `if (lane == 0)`，SASS 已经在最后一条线程间 shuffle 后用 `@p0 EXIT` 让其余 lane 退出。这表明编译器其实是可以自动用谓词优化了小分支，这里就不再对其写 PTX
+
+可以将按位与取位改写成 PTX：
+
+```cpp
+int q1;
+asm("bfe.u32 %0, %1, 4, 4;"
+    : "=r"(q1)
+    : "r"(packed));
 ```
 
-所以总的来说，当前版本的主要问题在于：一方面要发射大量解包、转换和反量化指令，另一方面在部分周期等压缩权重就绪。
+上述 PTX 表示直接从第 4 位开始取 4 位放入 `p1`
+
+实测 ncu 相关指标如下：
+
+```
+无 PTX
+    Avg. Executed Instructions Per Scheduler        inst    45,489.23
+    Executed Instructions                           inst    4,730,880
+    Avg. Issued Instructions Per Scheduler          inst    45,489.23
+    Issued Instructions                             inst    4,730,880
+
+有 PTX
+    Avg. Executed Instructions Per Scheduler        inst    46,119.38
+    Executed Instructions                           inst    4,796,416
+    Avg. Issued Instructions Per Scheduler          inst    46,119.38
+    Issued Instructions                             inst    4,796,416
+```
+
+可看到，更改为 PTX 后**指令数量反而变多**，这里核对了 SASS 发现多出的指令来源于取最高 4 位：
+
+源代码里，内层循环只有 4 次，使用 `#pragma unroll` 展开循环。在取最后高位时，编译器知道最后 `i = 3`，所以原版的第 4 次循环可以简化为 `w_packed >> 28`（右移后只剩下最高 4 位，**`& 0xfu` 可以省略**），省略的证据来自于下面的 SASS 指令：
+
+```
+C++ 版
+0x1110  SHF.R.U32.HI R26, RZ, 0x1c, R26   // 右移 28 位
+0x1150  I2FP.F32.U32 R26, R26
+
+bfe.u32 版
+0x10b0  SHF.R.U32.HI R26, RZ, 0x18, R26   // 右移 24 位，q0 也用这份结果
+0x10f0  SHF.R.U32.HI R9, RZ, 0x4, R26     // 再右移 4 位
+0x1140  SGXT.U32     R9, R9, 0x4          // 再取低 4 位并做零扩展
+0x1180  I2FP.F32.S32 R9, R9
+```
+
+这里 0x10b0 的右移还供同一字节的 q0 使用，整个循环来看，两版的移位指令总数相同。净增来自掩码和位域提取指令从 14 条变成了 16 条。`N = K = 4096`、`G = 128` 时，一行一个 warp，所以有 4,096 个 warp。每个 warp 在源码里跑 32 / 2 = 16 轮 g 循环，编译器把两轮合进一个 SASS 循环体，所以实际跑 8 轮。每轮净增 2 条，刚好是 4096 × 8 × 2 = 65,536
+
+当然还可以对其他代码写 PTX，这里实际测量个人感觉提升效果不大。所以暂且不采用 PTX
