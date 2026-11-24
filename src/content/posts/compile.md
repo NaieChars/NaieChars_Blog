@@ -1374,6 +1374,9 @@ TOP = ntop                                  // 最后更新栈顶
 ```
 
 ### 4.2.1 赋值语句生成三地址代码的 S-属性文法
+
+> 期末考试应该只会考如何将一串代码翻译成三地址语句，具体翻译的语义规则应该没那么恶心会到要考的地步:(
+
 **语义规则**（编译根据下面这些语义规则来生成三地址语句）：
 - **`place`（综合属性）**：表示“这个表达式算出来的结果，存放在哪里”。
 - **`code`（综合属性）**：表示“为了算出这个表达式，需要执行的三地址代码序列”。它相当于一份待办清单。
@@ -1504,7 +1507,7 @@ $$
 | `L.offset := newtemp()` | 申请临时变量名 `T2`，记在 `L.offset` 里 |
 | `emit(L.offset ':=' w '*' Elist.place)` | 用下标的位置生成 `T2 := 4 * i` |
 
-**如果是多维数组**，比如 `A[i, j]`，对应的**产生式有三条**，下面介绍多加的那一条的语义规则：
+**如果是多维数组**，比如 `A[i, j]`，对应的**产生式有三条**，下面介绍多加的那一条产生式的语义规则：
 
 ```go
 Elist -> Elist1, E    { t := newtemp();
@@ -1516,9 +1519,21 @@ Elist -> Elist1, E    { t := newtemp();
                         Elist.array := Elist1.array; }
 ```
 
-
+`Elist₁` 表示已经处理好的部分，`E` 表示逗号后新读到的一个下标表达式，左边的 Elist 表示接上这个下标后的整体。
 
 #### 类型转换
+
+举个例子就能明白：
+
+对于：`x := y + i * j`，其中 x,y 类型为 real，i j 类型为 int，该赋值语句产生的三地址代码为：
+
+```go
+T1 := i int* j
+T3 := inttoreal T1
+T2 := y real+ T3
+x := T2
+```
+
 
 ### 4.2.2 布尔表达式
 **逻辑运算符的优先级：not > and > or**  
@@ -1557,5 +1572,34 @@ E -> (E1)       { E.place := E1.place }
 ```
 
 
-
 ### 4.2.3 条件语句的翻译
+典例：`if a > c or b < d then S1 else S2`，翻译成三地址代码
+
+```go
+if a > c goto L2
+  goto L1
+
+L1: if b < d goto L2
+  goto L3
+
+L2: (关于S1的三地址代码)
+  goto Lnext
+
+L3: (关于S2的三地址代码)
+
+Lnext:
+```
+
+<p align="center">
+  <img src="/markdown_picture/编译原理/15.png" width="400">
+</p>
+
+> 图中的 102，104 是代码对应的行数，即最左边的那一列
+
+<p align="center">
+  <img src="/markdown_picture/编译原理/16.png" width="400">
+</p>
+
+<p align="center">
+  <img src="/markdown_picture/编译原理/17.png" width="400">
+</p>
