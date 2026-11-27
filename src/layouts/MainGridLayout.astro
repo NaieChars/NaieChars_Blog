@@ -116,7 +116,6 @@ const defaultPostListLayout = siteConfig.postListLayout?.defaultMode || "list";
 		defaultWallpaperMode={siteConfig.wallpaperMode.defaultMode}
 		defaultPostListLayout={siteConfig.postListLayout?.defaultMode || "list"}
 		BANNER_HEIGHT={BANNER_HEIGHT}
-		BANNER_HEIGHT_FULLSCREEN={BANNER_HEIGHT_FULLSCREEN}
 		pageScaling={siteConfig.pageScaling}
 		wavesEnabled={siteConfig.banner?.waves?.enable ?? true}
 		bannerTitleEnabled={siteConfig.banner?.homeText?.enable ?? true}
@@ -266,6 +265,40 @@ const defaultPostListLayout = siteConfig.postListLayout?.defaultMode || "list";
 
 			<FloatingControls headings={headings} />
 		</div>
+
+		<!-- 目录与正文共用层叠上下文，避免被背景覆盖 -->
+		{
+			siteConfig.toc.enable && siteConfig.toc.desktopSidebar && (
+				<div class="absolute w-full z-0 hidden 2xl:block pointer-events-auto">
+					<div class="relative max-w-(--page-width) mx-auto">
+						<div
+							id="toc-wrapper"
+							class:list={[
+								"hidden lg:block transition absolute top-0 w-(--toc-width) items-center",
+								"-right-(--toc-width)",
+								{
+									"toc-hide":
+										siteConfig.wallpaperMode.defaultMode ===
+										"banner",
+								},
+							]}
+						>
+							<div
+								id="toc-inner-wrapper"
+								class="fixed top-14 w-(--toc-width) h-[calc(100vh-6rem)] max-h-[calc(100vh-6rem)] overflow-x-hidden overflow-y-auto"
+							>
+								<div
+									id="toc-container"
+									class="w-full h-full transition-swup-fade"
+								>
+									<SidebarTOC headings={headings} />
+								</div>
+							</div>
+						</div>
+					</div>
+				</div>
+			)
+		}
 	</div>
 
 	<style>
@@ -278,40 +311,6 @@ const defaultPostListLayout = siteConfig.postListLayout?.defaultMode || "list";
 			height: fit-content;
 		}
 	</style>
-
-	<!-- 侧边栏TOC模式 -->
-	{
-		siteConfig.toc.enable && siteConfig.toc.desktopSidebar && (
-			<div class="absolute w-full z-0 hidden 2xl:block">
-				<div class="relative max-w-(--page-width) mx-auto">
-					<div
-						id="toc-wrapper"
-						class:list={[
-							"hidden lg:block transition absolute top-0 w-(--toc-width) items-center",
-							"-right-(--toc-width)",
-							{
-								"toc-hide":
-									siteConfig.wallpaperMode.defaultMode ===
-									"banner",
-							},
-						]}
-					>
-						<div
-							id="toc-inner-wrapper"
-							class="fixed top-14 w-(--toc-width) h-[calc(100vh-6rem)] max-h-[calc(100vh-6rem)] overflow-x-hidden overflow-y-auto"
-						>
-							<div
-								id="toc-container"
-								class="w-full h-full transition-swup-fade"
-							>
-								<SidebarTOC headings={headings} />
-							</div>
-						</div>
-					</div>
-				</div>
-			</div>
-		)
-	}
 
 	<!-- 保留此元素以确保Swup正常工作 -->
 	{

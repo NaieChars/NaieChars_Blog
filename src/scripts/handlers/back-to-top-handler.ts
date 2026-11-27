@@ -126,7 +126,9 @@ export class BackToTopHandler {
 			return;
 		}
 
-		const isBannerMode = document.body.classList.contains("enable-banner");
+		const isBannerMode =
+			document.body.classList.contains("enable-banner") &&
+			!document.body.classList.contains("fullscreen-banner");
 
 		if (isBannerMode) {
 			if (scrollTop > bannerHeight) {

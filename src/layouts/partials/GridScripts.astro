@@ -9,7 +9,6 @@ interface Props {
 	defaultWallpaperMode?: string;
 	defaultPostListLayout?: string;
 	BANNER_HEIGHT?: number;
-	BANNER_HEIGHT_FULLSCREEN?: number;
 	pageScaling?: { enable: boolean; targetWidth?: number };
 	wavesEnabled?: boolean;
 	bannerTitleEnabled?: boolean;
@@ -22,7 +21,6 @@ const {
 	defaultWallpaperMode = "banner",
 	defaultPostListLayout = "list",
 	BANNER_HEIGHT = 35,
-	BANNER_HEIGHT_FULLSCREEN = 100,
 	pageScaling = { enable: false },
 	wavesEnabled = true,
 	bannerTitleEnabled = true,
@@ -39,7 +37,6 @@ const {
 		defaultWallpaperMode,
 		defaultPostListLayout,
 		BANNER_HEIGHT,
-		BANNER_HEIGHT_FULLSCREEN,
 		pageScaling,
 		wavesEnabled,
 		bannerTitleEnabled,
@@ -359,14 +356,7 @@ const {
 				if (fullscreenWallpaper) {
 					fullscreenWallpaper.style.display = "block";
 				}
-				if (tocWrapper) {
-					const scrollTop = document.documentElement.scrollTop;
-					const bannerHeight =
-						window.innerHeight * (BANNER_HEIGHT_FULLSCREEN / 100);
-					if (scrollTop <= bannerHeight) {
-						tocWrapper.classList.add("toc-hide");
-					}
-				}
+				tocWrapper?.classList.remove("toc-hide");
 				body.classList.add("wallpaper-transparent");
 				body.classList.remove("no-banner-mode");
 				forceReflow();
